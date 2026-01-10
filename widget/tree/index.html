@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/themes/default/style.min.css">
+  <style>
+    body { 
+      margin: 0; 
+      padding: 0; 
+      font-family: Arial, sans-serif;
+    }
+    
+    #tree { 
+      width: 100%; 
+      height: calc(100vh - 60px); 
+      overflow: auto;
+      padding: 10px;
+      background: #fff;
+    }
+    
+    #status { 
+      padding: 10px 15px; 
+      background: #f5f5f5; 
+      border-top: 1px solid #ddd;
+      font-size: 14px;
+      height: 40px;
+      box-sizing: border-box;
+      color: #666;
+    }
+    
+    .jstree-default .jstree-clicked {
+      background-color: #e3f2fd !important;
+      color: #1976d2 !important;
+      box-shadow: none;
+      border-radius: 3px;
+    }
+    
+    .loading {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #f3f3f3;
+      border-top: 2px solid #3498db;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 10px;
+      vertical-align: middle;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .error {
+      color: #d32f2f;
+    }
+  </style>
+</head>
+<body>
+  <div id="tree"></div>
+  <div id="status">
+    <span class="loading"></span>
+    <span id="status-text">Инициализация...</span>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/jstree.min.js"></script>
+  <script src="./grist-plugin-api.js"></script>
+  
+  <script>
+    // Конфигурация - настройте под свои поля
+    const CONFIG = {
+      nameField: "Name",        // Поле с названием узла
+      childrenField: "Team",    // Поле с массивом ID детей
+      levelField: "level",      // Поле с уровнем вложенности
+      idField: "id"            // Поле с ID записи
+    };
+    
+    // Инициализация при загрузке страницы
+    $(document).ready(function() {
+      console.log('Документ загружен');
+      initializeApp();
+    });
+    
+    // Основная функция инициализации
+    function initializeApp() {
+      try {
+        console.log('Инициализация приложения...');
+        
+        // Проверяем, загружен ли Grist API
+        if (typeof grist === 'undefined') {
+          showError('Grist API не загружен');
+          return;
+        }
+        
+        console.log('Grist API доступен:', Object.keys(grist));
+        
+        // Инициализируем Grist с обработкой ошибок
+        // Инициализируем Grist с обработкой ошибок
+		try {
+		  grist.ready({
+			requiredAccess: 'read table',
+			columns: [{name: '*', allow: ['read']}]
+		  });
+		  
+		  // Grist готов - события будут срабатывать автоматически
+		  console.log('Grist инициализирован');
+		  
+		  // Инициализируем дерево
+		  initializeTree();
+		  
+		  // Загружаем данные через небольшую задержку
+		  setTimeout(function() {
+			loadTreeData();
+		  }, 500);
+		  
+		} catch (error) {
+		  console.error('Ошибка инициализации Grist:', error);
+		  showError('Ошибка доступа к данным: ' + (error.message || 'неизвестная ошибка'));
+		}
+
+        
+      } catch (error) {
+        console.error('Критическая ошибка инициализации:', error);
+        showError('Ошибка приложения: ' + error.message);
+      }
+    }
+    
+    // Инициализация дерева
+    function initializeTree() {
+      try {
+        console.log('Инициализация дерева...');
+        
+        $('#tree').jstree({
+          'core': {
+            'data': [],
+            'check_callback': true,
+            'themes': {
+              'responsive': false,
+              'dots': true,
+              'icons': true
+            }
+          },
+          'plugins': ['types'],
+          'types': {
+            'default': {
+              'icon': 'jstree-folder'
+            }
+          }
+        });
+        
+        // Обработчик выбора узла
+        $('#tree').on('select_node.jstree', function(e, data) {
+          try {
+            var node = data.node;
+            console.log('Выбран узел:', node);
+            
+            if (node && node.original && node.original.recordId) {
+              // Переходим к записи в Grist
+              grist.setCursorPos({ 
+                rowId: node.original.recordId 
+              }).catch(function(err) {
+                console.warn('Ошибка навигации:', err);
+              });
+            }
+          } catch (error) {
+            console.error('Ошибка обработки выбора узла:', error);
+          }
+        });
+        
+        console.log('Дерево инициализировано');
+        
+      } catch (error) {
+        console.error('Ошибка инициализации дерева:', error);
+        showError('Ошибка создания дерева: ' + error.message);
+      }
+    }
+    
+    // Загрузка данных из Grist
+async function loadTreeData() {
+  try {
+    updateStatus('Загрузка данных...');
+    
+    // Получаем текущую таблицу
+    var tableData = await grist.docApi.fetchSelectedTable();
+    
+    console.log('=== ДЕБАГ: СЫРЫЕ ДАННЫЕ ИЗ GRIST ===');
+    console.log('Структура данных:', tableData);
+    console.log('Поля таблицы:', Object.keys(tableData));
+    console.log('Количество строк:', tableData.id ? tableData.id.length : 0);
+    
+    // Покажем первую запись со всеми полями
+    if (tableData.id && tableData.id.length > 0) {
+      console.log('Пример первой записи:');
+      var firstRecord = {};
+      for (var key in tableData) {
+        if (key !== 'id' && key !== 'manualSort' && tableData[key]) {
+          firstRecord[key] = tableData[key][0];
+        }
+      }
+      console.log(firstRecord);
+    }
+        
+        // Преобразуем данные Grist в плоский массив записей
+        var records = convertGristDataToRecords(tableData);
+        console.log('Преобразовано записей:', records.length);
+        
+        if (records.length === 0) {
+          updateStatus('Нет данных для отображения');
+          return;
+        }
+        
+        // Строим дерево
+        var treeStructure  = buildTreeData(records);
+        
+        // Обновляем дерево
+        updateTree(treeStructure);
+        
+        updateStatus('Готово. Записей: ' + records.length);
+        
+      } catch (error) {
+        console.error('Ошибка загрузки данных:', error);
+        showError('Ошибка загрузки: ' + error.message);
+      }
+    }
+    
+    // Преобразование данных Grist в массив записей
+function convertGristDataToRecords(tableData) {
+  var records = [];
+  var rowCount = tableData.id ? tableData.id.length : 0;
+  
+  if (rowCount === 0) return records;
+  
+  // Получаем список всех полей (кроме служебных)
+  var fieldNames = Object.keys(tableData).filter(function(key) {
+    return key !== 'id' && key !== 'manualSort';
+  });
+  
+  console.log('Поля таблицы для построения дерева:', fieldNames);
+  
+  // Создаем записи для каждой строки
+  for (var i = 0; i < rowCount; i++) {
+    var record = {
+      id: tableData.id[i]
+    };
+    
+    // Добавляем значения полей
+    fieldNames.forEach(function(fieldName) {
+      if (tableData[fieldName] && tableData[fieldName][i] !== undefined) {
+        record[fieldName] = tableData[fieldName][i];
+      }
+    });
+    
+    records.push(record);
+  }
+  
+  console.log('Создано записей:', records.length);
+  console.log('Примеры записей:', records.slice(0, 3));
+  
+  return records;
+}
+    
+// Построение структуры дерева
+function buildTreeData(records) {
+  var nodesMap = {};
+  var rootNodes = [];
+  
+  console.log('=== ДЕБАГ: ПОСТРОЕНИЕ ДЕРЕВА ===');
+  console.log('Всего записей:', records.length);
+  
+  // 1. Создаем все узлы
+  records.forEach(function(record) {
+    var recordId = record[CONFIG.idField] || record.id;
+    if (!recordId) return;
+    
+    // Получаем имя узла (пробуем разные варианты)
+    var nodeName = record[CONFIG.nameField] || 
+                   record.Name || 
+                   record.name || 
+                   'Запись ' + recordId;
+    
+    nodesMap[recordId] = {
+      id: recordId.toString(),
+      text: nodeName,
+      original: {
+        recordId: recordId,
+        data: record
+      },
+      children: [] // Будем заполнять позже
+    };
+  });
+  
+  console.log('Создано узлов в карте:', Object.keys(nodesMap).length);
+  
+  // 2. Строим связи родитель-ребенок
+  records.forEach(function(record) {
+    var recordId = record[CONFIG.idField] || record.id;
+    var node = nodesMap[recordId];
+    
+    if (!node) return;
+    
+    // Получаем ID детей из поля Team или другого поля
+    var childrenIds = [];
+    var childrenFieldValue = record[CONFIG.childrenField] || record.Team || record.team;
+    
+    console.log('Запись', recordId, 'поле детей:', childrenFieldValue);
+    
+    if (childrenFieldValue) {
+      if (Array.isArray(childrenFieldValue)) {
+        childrenIds = childrenFieldValue;
+      } else if (typeof childrenFieldValue === 'string') {
+        try {
+          var parsed = JSON.parse(childrenFieldValue);
+          if (Array.isArray(parsed)) {
+            childrenIds = parsed;
+          }
+        } catch (e) {
+          // Может быть строка с ID через запятую
+          if (childrenFieldValue.includes(',')) {
+            childrenIds = childrenFieldValue.split(',').map(function(id) {
+              return id.trim();
+            }).filter(function(id) {
+              return id && id !== '';
+            });
+          } else if (childrenFieldValue.trim() !== '') {
+            childrenIds = [childrenFieldValue.trim()];
+          }
+        }
+      }
+    }
+    
+    // Сохраняем ID детей
+    node.children = childrenIds;
+  });
+  
+  // 3. Определяем корневые узлы (без родителей)
+  var allChildIds = new Set();
+  
+  // Собираем все ID детей
+  Object.values(nodesMap).forEach(function(node) {
+    if (node.children && Array.isArray(node.children)) {
+      node.children.forEach(function(childId) {
+        allChildIds.add(childId.toString());
+      });
+    }
+  });
+  
+  // Корневые узлы - те, которые не являются чьими-то детьми
+  Object.values(nodesMap).forEach(function(node) {
+    if (!allChildIds.has(node.id)) {
+      rootNodes.push(node);
+    }
+  });
+  
+  console.log('Корневых узлов найдено:', rootNodes.length);
+  console.log('Карта узлов:', nodesMap);
+  console.log('Корневые узлы:', rootNodes);
+  
+  return {
+    nodesMap: nodesMap,
+    rootNodes: rootNodes
+  };
+}
+    
+    // Проверка, есть ли у записи родитель
+    function hasParent(recordId, allRecords) {
+      for (var i = 0; i < allRecords.length; i++) {
+        var record = allRecords[i];
+        var childrenFieldValue = record[CONFIG.childrenField] || record.Team;
+        
+        if (!childrenFieldValue) continue;
+        
+        var childrenIds = [];
+        if (Array.isArray(childrenFieldValue)) {
+          childrenIds = childrenFieldValue;
+        } else if (typeof childrenFieldValue === 'string') {
+          try {
+            var parsed = JSON.parse(childrenFieldValue);
+            if (Array.isArray(parsed)) {
+              childrenIds = parsed;
+            }
+          } catch (e) {
+            continue;
+          }
+        }
+        
+        if (childrenIds.includes(recordId)) {
+          return true;
+        }
+      }
+      return false;
+    }
+    
+// Обновление дерева
+function updateTree(treeStructure) {
+  try {
+    var $tree = $('#tree');
+    var nodesMap = treeStructure.nodesMap;
+    var rootNodes = treeStructure.rootNodes;
+    
+    // Функция для рекурсивного построения дерева
+    function buildJsTreeNode(nodeId) {
+      var node = nodesMap[nodeId];
+      if (!node) return null;
+      
+      var jsTreeNode = {
+        id: node.id,
+        text: node.text,
+        original: node.original,
+        state: { opened: true },
+        icon: 'jstree-folder'
+      };
+      
+      // Если у узла есть дети, строим их рекурсивно
+      if (node.children && node.children.length > 0) {
+        jsTreeNode.children = [];
+        node.children.forEach(function(childId) {
+          var childNode = buildJsTreeNode(childId);
+          if (childNode) {
+            jsTreeNode.children.push(childNode);
+          }
+        });
+        
+        // Если после фильтрации детей нет, убираем свойство children
+        if (jsTreeNode.children.length === 0) {
+          delete jsTreeNode.children;
+          jsTreeNode.icon = 'jstree-file';
+        }
+      } else {
+        // У узла нет детей
+        jsTreeNode.icon = 'jstree-file';
+      }
+      
+      return jsTreeNode;
+    }
+    
+    // Строим данные для jsTree
+    var jsTreeData = [];
+    rootNodes.forEach(function(rootNode) {
+      var jsTreeNode = buildJsTreeNode(rootNode.id);
+      if (jsTreeNode) {
+        jsTreeData.push(jsTreeNode);
+      }
+    });
+    
+    console.log('Данные для jsTree:', jsTreeData);
+    
+    // Проверяем, инициализировано ли дерево
+    if (!$tree.data('jstree')) {
+      console.log('Инициализируем дерево с данными...');
+      
+      $tree.jstree({
+        'core': {
+          'data': jsTreeData,
+          'check_callback': true,
+          'themes': {
+            'responsive': false,
+            'dots': true,
+            'icons': true
+          }
+        },
+        'plugins': ['types'],
+        'types': {
+          'default': {
+            'icon': 'jstree-folder'
+          },
+          'file': {
+            'icon': 'jstree-file'
+          }
+        }
+      });
+      
+      // Обработчик выбора узла
+      $tree.on('select_node.jstree', function(e, data) {
+        try {
+          var node = data.node;
+          console.log('Выбран узел:', node);
+          
+          if (node && node.original && node.original.recordId) {
+            grist.setCursorPos({ 
+              rowId: node.original.recordId 
+            }).catch(function(err) {
+              console.warn('Ошибка навигации:', err);
+            });
+          }
+        } catch (error) {
+          console.error('Ошибка обработки выбора узла:', error);
+        }
+      });
+      
+    } else {
+      // Обновляем существующее дерево
+      var jsTree = $tree.jstree(true);
+      jsTree.settings.core.data = jsTreeData;
+      jsTree.refresh(true);
+    }
+    
+    updateStatus('Дерево построено. Узлов: ' + Object.keys(nodesMap).length);
+    
+  } catch (error) {
+    console.error('Ошибка обновления дерева:', error);
+    showError('Ошибка построения дерева: ' + error.message);
+  }
+}
+// Новая функция для немедленной инициализации дерева
+function initializeTreeNow() {
+  $('#tree').jstree({
+    'core': {
+      'data': [],
+      'check_callback': true,
+      'themes': {
+        'responsive': false,
+        'dots': true,
+        'icons': true
+      }
+    },
+    'plugins': ['types'],
+    'types': {
+      'default': {
+        'icon': 'jstree-folder'
+      }
+    }
+  });
+  
+  // Обработчик выбора узла
+  $('#tree').on('select_node.jstree', function(e, data) {
+    try {
+      var node = data.node;
+      console.log('Выбран узел:', node);
+      
+      if (node && node.original && node.original.recordId) {
+        grist.setCursorPos({ 
+          rowId: node.original.recordId 
+        }).catch(function(err) {
+          console.warn('Ошибка навигации:', err);
+        });
+      }
+    } catch (error) {
+      console.error('Ошибка обработки выбора узла:', error);
+    }
+  });
+}
+    
+    // Загрузка детей узла
+    function loadNodeChildren(node) {
+      if (!node.children_d || node.children_d.length === 0) {
+        return;
+      }
+      
+      var childrenData = node.children_d.map(function(childId) {
+        return {
+          id: childId,
+          text: 'Запись ' + childId,
+          children: false,
+          icon: 'jstree-file'
+        };
+      });
+      
+      var jsTree = $('#tree').jstree(true);
+      jsTree.create_node(node.id, childrenData, 'last', function() {
+        jsTree.open_node(node.id);
+      });
+    }
+    
+    // Обновление статуса
+    function updateStatus(message) {
+      $('#status-text').text(message);
+    }
+    
+    // Показать ошибку
+    function showError(message) {
+      $('#status').addClass('error');
+      $('#status-text').text(message);
+      $('.loading').hide();
+    }
+    
+    // Обработчик выбора записи в Grist
+    if (typeof grist !== 'undefined') {
+      grist.onRecord(function(record) {
+        if (!record || !record.id) return;
+        
+        var $tree = $('#tree');
+        if (!$tree.hasClass('jstree')) return;
+        
+        var recordId = record.id.toString();
+        var jsTree = $tree.jstree(true);
+        
+        try {
+          jsTree.select_node(recordId);
+        } catch (error) {
+          console.log('Узел не найден:', recordId);
+        }
+      });
+      
+      grist.onRecords(function() {
+        console.log('Данные обновились');
+        $('.loading').show();
+        loadTreeData();
+      });
+    }
+    
+    // Убираем глобальный обработчик ошибок, чтобы видеть их в консоли
+    // window.addEventListener('error', function(event) {
+    //   console.error('Глобальная ошибка:', event.error);
+    // });
+    
+  </script>
+</body>
+</html>

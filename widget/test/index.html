@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>GRIST Анализ</title>
+  <script src="./grist-plugin-api.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+    pre { background: #f5f5f5; padding: 10px; }
+    .success { color: green; }
+    .error { color: red; }
+  </style>
+</head>
+<body>
+
+<h2>GRIST Анализ данных</h2>
+<button id="runBtn">▶ Запустить анализ</button>
+<div id="status">Нажмите кнопку</div>
+<pre id="debugOutput"></pre>
+
+<script>
+  grist.ready({
+    requiredAccess: 'full'
+  });
+
+  const status = document.getElementById("status");
+  const debugOutput = document.getElementById("debugOutput");
+  const runBtn = document.getElementById("runBtn");
+
+  runBtn.addEventListener("click", async () => {
+    try {
+      status.textContent = "Чтение данных...";
+      status.className = "";
+      debugOutput.textContent = "";
+      
+      // Получаем данные
+      const tableA = await grist.docApi.fetchTable("TableA");
+      const tableB = await grist.docApi.fetchTable("TableB");
+      
+      // ДЕБАГ информация
+      debugOutput.textContent = "=== ДАННЫЕ ИЗ GRIST ===\n\n";
+      debugOutput.textContent += "TableA:\n" + JSON.stringify(tableA, null, 2) + "\n\n";
+      debugOutput.textContent += "TableB:\n" + JSON.stringify(tableB, null, 2) + "\n\n";
+      
+      if (!tableA) {
+        throw new Error("TableA не загружена");
+      }
+      if (!tableB) {
+        throw new Error("TableB не загружена");
+      }
+      
+      // Проверяем структуру (у вас НЕТ вложенного fields!)
+      debugOutput.textContent += "=== АНАЛИЗ СТРУКТУРЫ ===\n\n";
+      
+      // Ваши данные напрямую содержат массивы!
+      // Ключи таблицы (кроме служебных):
+      const tableAKeys = Object.keys(tableA).filter(key => 
+        key !== 'id' && key !== 'manualSort'
+      );
+      const tableBKeys = Object.keys(tableB).filter(key => 
+        key !== 'id' && key !== 'manualSort'
+      );
+      
+      debugOutput.textContent += `Поля TableA: ${tableAKeys.join(', ')}\n`;
+      debugOutput.textContent += `Поля TableB: ${tableBKeys.join(', ')}\n\n`;
+      
+      // Суммируем TableA
+      let sumA = 0;
+      if (tableA.Amount && Array.isArray(tableA.Amount)) {
+        sumA = tableA.Amount.reduce((total, value) => {
+          const num = Number(value);
+          return total + (isNaN(num) ? 0 : num);
+        }, 0);
+        debugOutput.textContent += `TableA.Amount: ${tableA.Amount.join(', ')} = ${sumA}\n`;
+      } else {
+        // Ищем другое числовое поле
+        for (const key of tableAKeys) {
+          if (tableA[key] && Array.isArray(tableA[key])) {
+            const firstVal = tableA[key][0];
+            if (!isNaN(Number(firstVal)) && firstVal !== null) {
+              sumA = tableA[key].reduce((total, value) => {
+                const num = Number(value);
+                return total + (isNaN(num) ? 0 : num);
+              }, 0);
+              debugOutput.textContent += `TableA.${key}: ${tableA[key].join(', ')} = ${sumA}\n`;
+              break;
+            }
+          }
+        }
+      }
+      
+      // Суммируем TableB
+      let sumB = 0;
+      if (tableB.Amount && Array.isArray(tableB.Amount)) {
+        sumB = tableB.Amount.reduce((total, value) => {
+          const num = Number(value);
+          return total + (isNaN(num) ? 0 : num);
+        }, 0);
+        debugOutput.textContent += `TableB.Amount: ${tableB.Amount.join(', ')} = ${sumB}\n`;
+      } else {
+        for (const key of tableBKeys) {
+          if (tableB[key] && Array.isArray(tableB[key])) {
+            const firstVal = tableB[key][0];
+            if (!isNaN(Number(firstVal)) && firstVal !== null) {
+              sumB = tableB[key].reduce((total, value) => {
+                const num = Number(value);
+                return total + (isNaN(num) ? 0 : num);
+              }, 0);
+              debugOutput.textContent += `TableB.${key}: ${tableB[key].join(', ')} = ${sumB}\n`;
+              break;
+            }
+          }
+        }
+      }
+      
+      debugOutput.textContent += `\n=== РЕЗУЛЬТАТЫ ===\n`;
+      debugOutput.textContent += `Сумма TableA: ${sumA}\n`;
+      debugOutput.textContent += `Сумма TableB: ${sumB}\n`;
+      debugOutput.textContent += `Общая сумма: ${sumA + sumB}\n`;
+      
+      status.textContent = "Запись в таблицу Result...";
+      
+      // Создаем запись в Result
+      await grist.docApi.applyUserActions([
+        ["AddRecord", "Result", null, {
+          SumA: sumA,
+          SumB: sumB,
+          Total: sumA + sumB,
+          Created: new Date().toISOString()
+        }]
+      ]);
+      
+      status.textContent = `✅ Готово! SumA: ${sumA}, SumB: ${sumB}, Total: ${sumA + sumB}`;
+      status.className = "success";
+      
+    } catch (error) {
+      console.error("Ошибка:", error);
+      status.textContent = `❌ Ошибка: ${error.message}`;
+      status.className = "error";
+      debugOutput.textContent += `\n\n=== ОШИБКА ===\n${error.message}\n\n`;
+      
+      // Добавляем дополнительную отладку
+      if (error.message.includes('fields')) {
+        debugOutput.textContent += "ПОДСКАЗКА: В ваших данных нет объекта 'fields'!\n";
+        debugOutput.textContent += "Данные напрямую содержат массивы на верхнем уровне.\n";
+        debugOutput.textContent += "Используйте table.Amount вместо table.fields.Amount\n";
+      }
+    }
+  });
+</script>
+
+</body>
+</html>
