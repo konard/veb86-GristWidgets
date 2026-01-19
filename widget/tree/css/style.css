@@ -1,0 +1,171 @@
+/**
+ * Стили для виджета "Дерево иерархии устройств"
+ *
+ * Этот файл содержит все стили для виджета построения иерархического дерева.
+ * Стили разделены на логические блоки для лучшей читаемости.
+ */
+
+/* ========================================
+   БАЗОВЫЕ СТИЛИ
+   ======================================== */
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: Arial, sans-serif;
+}
+
+/* ========================================
+   ПАНЕЛЬ НАСТРОЕК
+   ======================================== */
+
+/**
+ * Контейнер панели настроек.
+ * По умолчанию скрыт, показывается при добавлении класса 'visible'.
+ */
+#settings-panel {
+  background: #f8f9fa;
+  padding: 12px 15px;
+  border-bottom: 2px solid #dee2e6;
+  display: none;
+}
+
+#settings-panel.visible {
+  display: block;
+}
+
+/**
+ * Кнопка для открытия/закрытия панели настроек.
+ * Расположена в правом верхнем углу, уменьшена до иконки шестеренки.
+ */
+#settings-toggle {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  z-index: 1000;
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  transition: background-color 0.2s ease;
+}
+
+#settings-toggle:hover {
+  background: #0056b3;
+}
+
+/**
+ * Строки полей настроек.
+ */
+.settings-row {
+  margin: 8px 0;
+}
+
+.settings-row label {
+  display: inline-block;
+  width: 180px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.settings-row input,
+.settings-row select {
+  padding: 4px 8px;
+  border: 1px solid #ced4da;
+  border-radius: 3px;
+  width: 200px;
+  font-size: 12px;
+}
+
+/* ========================================
+   КОНТЕЙНЕР ДЕРЕВА
+   ======================================== */
+
+/**
+ * Основной контейнер для отображения дерева.
+ */
+#tree {
+  width: 100%;
+  height: calc(100vh - 60px);
+  overflow: auto;
+  padding: 10px;
+  background: #fff;
+}
+
+/**
+ * Высота дерева с открытой панелью настроек.
+ */
+#tree.with-settings {
+  height: calc(100vh - 200px);
+}
+
+/* ========================================
+   СТАТУС-БАР
+   ======================================== */
+
+/**
+ * Статус-бар внизу виджета для отображения состояния.
+ */
+#status {
+  padding: 10px 15px;
+  background: #f5f5f5;
+  border-top: 1px solid #ddd;
+  font-size: 14px;
+  height: 40px;
+  box-sizing: border-box;
+  color: #666;
+}
+
+/* ========================================
+   СТИЛИ ДЕРЕВА (jsTree)
+   ======================================== */
+
+/**
+ * Выделение выбранного узла в дереве.
+ */
+.jstree-default .jstree-clicked {
+  background-color: #e3f2fd !important;
+  color: #1976d2 !important;
+  box-shadow: none;
+  border-radius: 3px;
+}
+
+/* ========================================
+   ИНДИКАТОРЫ СОСТОЯНИЯ
+   ======================================== */
+
+/**
+ * Индикатор загрузки (спиннер).
+ */
+.loading {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #f3f3f3;
+  border-top: 2px solid #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 10px;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/**
+ * Стиль для сообщений об ошибках.
+ */
+.error {
+  color: #d32f2f;
+}
