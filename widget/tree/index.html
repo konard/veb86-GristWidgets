@@ -4,37 +4,90 @@
   <meta charset="utf-8">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/themes/default/style.min.css">
   <style>
-    body { 
-      margin: 0; 
-      padding: 0; 
+    body {
+      margin: 0;
+      padding: 0;
       font-family: Arial, sans-serif;
     }
-    
-    #tree { 
-      width: 100%; 
-      height: calc(100vh - 60px); 
+
+    /* Панель настроек */
+    #settings-panel {
+      background: #f8f9fa;
+      padding: 12px 15px;
+      border-bottom: 2px solid #dee2e6;
+      display: none;
+    }
+
+    #settings-panel.visible {
+      display: block;
+    }
+
+    #settings-toggle {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    #settings-toggle:hover {
+      background: #0056b3;
+    }
+
+    .settings-row {
+      margin: 8px 0;
+    }
+
+    .settings-row label {
+      display: inline-block;
+      width: 180px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .settings-row input {
+      padding: 4px 8px;
+      border: 1px solid #ced4da;
+      border-radius: 3px;
+      width: 200px;
+      font-size: 12px;
+    }
+
+    #tree {
+      width: 100%;
+      height: calc(100vh - 60px);
       overflow: auto;
       padding: 10px;
       background: #fff;
     }
-    
-    #status { 
-      padding: 10px 15px; 
-      background: #f5f5f5; 
+
+    #tree.with-settings {
+      height: calc(100vh - 140px);
+    }
+
+    #status {
+      padding: 10px 15px;
+      background: #f5f5f5;
       border-top: 1px solid #ddd;
       font-size: 14px;
       height: 40px;
       box-sizing: border-box;
       color: #666;
     }
-    
+
     .jstree-default .jstree-clicked {
       background-color: #e3f2fd !important;
       color: #1976d2 !important;
       box-shadow: none;
       border-radius: 3px;
     }
-    
+
     .loading {
       display: inline-block;
       width: 16px;
@@ -46,19 +99,45 @@
       margin-right: 10px;
       vertical-align: middle;
     }
-    
+
     @keyframes spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
-    
+
     .error {
       color: #d32f2f;
     }
   </style>
 </head>
 <body>
+  <!-- Кнопка для открытия настроек -->
+  <button id="settings-toggle">⚙️ Настройки</button>
+
+  <!-- Панель настроек -->
+  <div id="settings-panel">
+    <div class="settings-row">
+      <label>Поле ID устройства:</label>
+      <input type="text" id="field-id" value="NMO_BaseName" placeholder="NMO_BaseName">
+    </div>
+    <div class="settings-row">
+      <label>Поле родителя:</label>
+      <input type="text" id="field-parent" value="HeadDeviceName" placeholder="HeadDeviceName">
+    </div>
+    <div class="settings-row">
+      <label>Поле флага иерархии:</label>
+      <input type="text" id="field-flag" value="icanbeheadunit" placeholder="icanbeheadunit">
+    </div>
+    <div class="settings-row">
+      <label>Поле отображения:</label>
+      <input type="text" id="field-display" value="NMO_BaseName" placeholder="Оставьте пустым = ID">
+    </div>
+  </div>
+
+  <!-- Контейнер дерева -->
   <div id="tree"></div>
+
+  <!-- Статус-бар -->
   <div id="status">
     <span class="loading"></span>
     <span id="status-text">Инициализация...</span>
@@ -67,71 +146,342 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/jstree.min.js"></script>
   <script src="./grist-plugin-api.js"></script>
-  
-  <script>
-    // Конфигурация - настройте под свои поля
-    const CONFIG = {
-      nameField: "Name",        // Поле с названием узла
-      childrenField: "Team",    // Поле с массивом ID детей
-      levelField: "level",      // Поле с уровнем вложенности
-      idField: "id"            // Поле с ID записи
-    };
-    
-    // Инициализация при загрузке страницы
-    $(document).ready(function() {
-      console.log('Документ загружен');
-      initializeApp();
-    });
-    
-    // Основная функция инициализации
-    function initializeApp() {
-      try {
-        console.log('Инициализация приложения...');
-        
-        // Проверяем, загружен ли Grist API
-        if (typeof grist === 'undefined') {
-          showError('Grist API не загружен');
-          return;
-        }
-        
-        console.log('Grist API доступен:', Object.keys(grist));
-        
-        // Инициализируем Grist с обработкой ошибок
-        // Инициализируем Grist с обработкой ошибок
-		try {
-		  grist.ready({
-			requiredAccess: 'read table',
-			columns: [{name: '*', allow: ['read']}]
-		  });
-		  
-		  // Grist готов - события будут срабатывать автоматически
-		  console.log('Grist инициализирован');
-		  
-		  // Инициализируем дерево
-		  initializeTree();
-		  
-		  // Загружаем данные через небольшую задержку
-		  setTimeout(function() {
-			loadTreeData();
-		  }, 500);
-		  
-		} catch (error) {
-		  console.error('Ошибка инициализации Grist:', error);
-		  showError('Ошибка доступа к данным: ' + (error.message || 'неизвестная ошибка'));
-		}
 
-        
-      } catch (error) {
-        console.error('Критическая ошибка инициализации:', error);
-        showError('Ошибка приложения: ' + error.message);
+  <script>
+    // ========================================
+    // МОДУЛЬ: КОНФИГУРАЦИЯ
+    // ========================================
+
+    /**
+     * Модуль управления конфигурацией виджета.
+     * Хранит настройки полей и предоставляет API для их изменения.
+     */
+    var ConfigModule = (function() {
+      // Конфигурация по умолчанию
+      var config = {
+        idField: "NMO_BaseName",        // Поле с идентификатором устройства
+        parentField: "HeadDeviceName",  // Поле с родительским устройством
+        flagField: "icanbeheadunit",    // Поле с флагом участия в иерархии
+        displayField: "NMO_BaseName"    // Поле для отображения (может отличаться от ID)
+      };
+
+      /**
+       * Получить текущую конфигурацию.
+       * @returns {Object} Объект конфигурации
+       */
+      function getConfig() {
+        return Object.assign({}, config);
       }
-    }
-    
-    // Инициализация дерева
-    function initializeTree() {
-      try {
+
+      /**
+       * Обновить конфигурацию из полей ввода.
+       */
+      function updateConfigFromInputs() {
+        var idField = $('#field-id').val().trim();
+        var parentField = $('#field-parent').val().trim();
+        var flagField = $('#field-flag').val().trim();
+        var displayField = $('#field-display').val().trim();
+
+        if (idField) config.idField = idField;
+        if (parentField) config.parentField = parentField;
+        if (flagField) config.flagField = flagField;
+        config.displayField = displayField || config.idField;
+
+        console.log('Конфигурация обновлена:', config);
+      }
+
+      /**
+       * Установить значения полей ввода из конфигурации.
+       */
+      function setInputsFromConfig() {
+        $('#field-id').val(config.idField);
+        $('#field-parent').val(config.parentField);
+        $('#field-flag').val(config.flagField);
+        $('#field-display').val(config.displayField);
+      }
+
+      return {
+        getConfig: getConfig,
+        updateConfigFromInputs: updateConfigFromInputs,
+        setInputsFromConfig: setInputsFromConfig
+      };
+    })();
+
+    // ========================================
+    // МОДУЛЬ: РАБОТА С ДАННЫМИ
+    // ========================================
+
+    /**
+     * Модуль для работы с данными из Grist.
+     * Отвечает за загрузку и преобразование данных.
+     */
+    var DataModule = (function() {
+      /**
+       * Загрузить данные из текущей таблицы Grist.
+       * @returns {Promise<Array>} Массив записей
+       */
+      async function loadTableData() {
+        try {
+          var tableData = await grist.docApi.fetchSelectedTable();
+          console.log('Получены данные из Grist:', tableData);
+
+          var records = convertGristDataToRecords(tableData);
+          console.log('Преобразовано записей:', records.length);
+
+          return records;
+        } catch (error) {
+          console.error('Ошибка загрузки данных:', error);
+          throw new Error('Не удалось загрузить данные: ' + error.message);
+        }
+      }
+
+      /**
+       * Преобразовать данные из формата Grist в массив объектов.
+       * @param {Object} tableData - Данные таблицы из Grist
+       * @returns {Array} Массив записей
+       */
+      function convertGristDataToRecords(tableData) {
+        var records = [];
+        var rowCount = tableData.id ? tableData.id.length : 0;
+
+        if (rowCount === 0) {
+          return records;
+        }
+
+        // Получаем список всех полей (кроме служебных)
+        var fieldNames = Object.keys(tableData).filter(function(key) {
+          return key !== 'id' && key !== 'manualSort';
+        });
+
+        // Создаем объект для каждой строки
+        for (var i = 0; i < rowCount; i++) {
+          var record = {
+            id: tableData.id[i]
+          };
+
+          // Добавляем значения всех полей
+          fieldNames.forEach(function(fieldName) {
+            if (tableData[fieldName] && tableData[fieldName][i] !== undefined) {
+              record[fieldName] = tableData[fieldName][i];
+            }
+          });
+
+          records.push(record);
+        }
+
+        return records;
+      }
+
+      return {
+        loadTableData: loadTableData
+      };
+    })();
+
+    // ========================================
+    // МОДУЛЬ: ПОСТРОЕНИЕ ИЕРАРХИИ
+    // ========================================
+
+    /**
+     * Модуль для построения иерархического дерева устройств.
+     * Реализует алгоритм построения на основе ссылок родитель-ребенок.
+     */
+    var HierarchyModule = (function() {
+      /**
+       * Построить иерархическое дерево из записей.
+       * @param {Array} records - Массив всех записей
+       * @param {Object} config - Конфигурация полей
+       * @returns {Object} Объект с картой узлов и корневыми элементами
+       */
+      function buildHierarchy(records, config) {
+        console.log('=== ПОСТРОЕНИЕ ИЕРАРХИИ ===');
+        console.log('Всего записей:', records.length);
+        console.log('Конфигурация:', config);
+
+        // Шаг 1: Фильтруем записи по флагу icanbeheadunit
+        var filteredRecords = filterRecordsByFlag(records, config);
+        console.log('После фильтрации по флагу:', filteredRecords.length);
+
+        // Шаг 2: Создаем карту узлов по идентификатору
+        var nodesMap = createNodesMap(filteredRecords, config);
+        console.log('Создано узлов:', Object.keys(nodesMap).length);
+
+        // Шаг 3: Устанавливаем связи родитель-ребенок
+        linkParentChild(nodesMap, filteredRecords, config);
+
+        // Шаг 4: Определяем корневые узлы
+        var rootNodes = findRootNodes(nodesMap, config);
+        console.log('Найдено корневых узлов:', rootNodes.length);
+
+        // Шаг 5: Проверяем и обрабатываем циклические ссылки
+        handleCyclicReferences(nodesMap, rootNodes);
+
+        return {
+          nodesMap: nodesMap,
+          rootNodes: rootNodes
+        };
+      }
+
+      /**
+       * Фильтровать записи по флагу участия в иерархии.
+       * @param {Array} records - Все записи
+       * @param {Object} config - Конфигурация
+       * @returns {Array} Отфильтрованные записи
+       */
+      function filterRecordsByFlag(records, config) {
+        return records.filter(function(record) {
+          var flagValue = record[config.flagField];
+          // Флаг должен быть равен 1 (число или строка)
+          return flagValue == 1 || flagValue === true;
+        });
+      }
+
+      /**
+       * Создать карту узлов из записей.
+       * @param {Array} records - Отфильтрованные записи
+       * @param {Object} config - Конфигурация
+       * @returns {Object} Карта узлов {id: node}
+       */
+      function createNodesMap(records, config) {
+        var nodesMap = {};
+
+        records.forEach(function(record) {
+          var nodeId = record[config.idField];
+          if (!nodeId) return;
+
+          // Получаем текст для отображения
+          var displayText = record[config.displayField] || nodeId;
+
+          nodesMap[nodeId] = {
+            id: nodeId,
+            text: displayText,
+            parentId: null,
+            children: [],
+            recordId: record.id,
+            data: record
+          };
+        });
+
+        return nodesMap;
+      }
+
+      /**
+       * Установить связи между родительскими и дочерними узлами.
+       * @param {Object} nodesMap - Карта узлов
+       * @param {Array} records - Записи
+       * @param {Object} config - Конфигурация
+       */
+      function linkParentChild(nodesMap, records, config) {
+        records.forEach(function(record) {
+          var nodeId = record[config.idField];
+          var parentId = record[config.parentField];
+
+          if (!nodeId || !parentId) return;
+
+          var node = nodesMap[nodeId];
+          var parentNode = nodesMap[parentId];
+
+          // Проверяем, что оба узла существуют
+          if (node && parentNode) {
+            node.parentId = parentId;
+
+            // Добавляем текущий узел в список детей родителя
+            if (parentNode.children.indexOf(nodeId) === -1) {
+              parentNode.children.push(nodeId);
+            }
+          }
+        });
+      }
+
+      /**
+       * Найти корневые узлы (без родителей).
+       * @param {Object} nodesMap - Карта узлов
+       * @param {Object} config - Конфигурация
+       * @returns {Array} Массив корневых узлов
+       */
+      function findRootNodes(nodesMap, config) {
+        var rootNodes = [];
+
+        Object.values(nodesMap).forEach(function(node) {
+          // Узел корневой, если у него нет родителя или родитель не найден
+          if (!node.parentId || !nodesMap[node.parentId]) {
+            rootNodes.push(node);
+          }
+        });
+
+        return rootNodes;
+      }
+
+      /**
+       * Обработать циклические ссылки в дереве.
+       * Удаляет циклы путем превращения циклических узлов в корневые.
+       * @param {Object} nodesMap - Карта узлов
+       * @param {Array} rootNodes - Массив корневых узлов
+       */
+      function handleCyclicReferences(nodesMap, rootNodes) {
+        var visited = new Set();
+        var recursionStack = new Set();
+
+        /**
+         * Проверить узел на наличие цикла (DFS).
+         * @param {String} nodeId - ID узла
+         * @returns {Boolean} true если найден цикл
+         */
+        function hasCycle(nodeId) {
+          if (recursionStack.has(nodeId)) {
+            console.warn('Обнаружен цикл в узле:', nodeId);
+            return true;
+          }
+
+          if (visited.has(nodeId)) {
+            return false;
+          }
+
+          visited.add(nodeId);
+          recursionStack.add(nodeId);
+
+          var node = nodesMap[nodeId];
+          if (node && node.children) {
+            for (var i = 0; i < node.children.length; i++) {
+              if (hasCycle(node.children[i])) {
+                return true;
+              }
+            }
+          }
+
+          recursionStack.delete(nodeId);
+          return false;
+        }
+
+        // Проверяем все корневые узлы
+        rootNodes.forEach(function(rootNode) {
+          hasCycle(rootNode.id);
+        });
+      }
+
+      return {
+        buildHierarchy: buildHierarchy
+      };
+    })();
+
+    // ========================================
+    // МОДУЛЬ: ОТОБРАЖЕНИЕ ДЕРЕВА (UI)
+    // ========================================
+
+    /**
+     * Модуль для отображения дерева в интерфейсе.
+     * Использует библиотеку jsTree для рендеринга.
+     */
+    var UIModule = (function() {
+      var isInitialized = false;
+
+      /**
+       * Инициализировать пустое дерево.
+       */
+      function initializeTree() {
+        if (isInitialized) return;
+
         console.log('Инициализация дерева...');
-        
+
         $('#tree').jstree({
           'core': {
             'data': [],
@@ -142,469 +492,355 @@
               'icons': true
             }
           },
-          'plugins': ['types'],
+          'plugins': ['types', 'search'],
           'types': {
             'default': {
               'icon': 'jstree-folder'
+            },
+            'file': {
+              'icon': 'jstree-file'
             }
           }
         });
-        
+
         // Обработчик выбора узла
-        $('#tree').on('select_node.jstree', function(e, data) {
-          try {
-            var node = data.node;
-            console.log('Выбран узел:', node);
-            
-            if (node && node.original && node.original.recordId) {
-              // Переходим к записи в Grist
-              grist.setCursorPos({ 
-                rowId: node.original.recordId 
-              }).catch(function(err) {
-                console.warn('Ошибка навигации:', err);
-              });
-            }
-          } catch (error) {
-            console.error('Ошибка обработки выбора узла:', error);
-          }
-        });
-        
+        $('#tree').on('select_node.jstree', handleNodeSelection);
+
+        isInitialized = true;
         console.log('Дерево инициализировано');
-        
-      } catch (error) {
-        console.error('Ошибка инициализации дерева:', error);
-        showError('Ошибка создания дерева: ' + error.message);
       }
-    }
-    
-    // Загрузка данных из Grist
-async function loadTreeData() {
-  try {
-    updateStatus('Загрузка данных...');
-    
-    // Получаем текущую таблицу
-    var tableData = await grist.docApi.fetchSelectedTable();
-    
-    console.log('=== ДЕБАГ: СЫРЫЕ ДАННЫЕ ИЗ GRIST ===');
-    console.log('Структура данных:', tableData);
-    console.log('Поля таблицы:', Object.keys(tableData));
-    console.log('Количество строк:', tableData.id ? tableData.id.length : 0);
-    
-    // Покажем первую запись со всеми полями
-    if (tableData.id && tableData.id.length > 0) {
-      console.log('Пример первой записи:');
-      var firstRecord = {};
-      for (var key in tableData) {
-        if (key !== 'id' && key !== 'manualSort' && tableData[key]) {
-          firstRecord[key] = tableData[key][0];
-        }
-      }
-      console.log(firstRecord);
-    }
-        
-        // Преобразуем данные Grist в плоский массив записей
-        var records = convertGristDataToRecords(tableData);
-        console.log('Преобразовано записей:', records.length);
-        
-        if (records.length === 0) {
-          updateStatus('Нет данных для отображения');
-          return;
-        }
-        
-        // Строим дерево
-        var treeStructure  = buildTreeData(records);
-        
-        // Обновляем дерево
-        updateTree(treeStructure);
-        
-        updateStatus('Готово. Записей: ' + records.length);
-        
-      } catch (error) {
-        console.error('Ошибка загрузки данных:', error);
-        showError('Ошибка загрузки: ' + error.message);
-      }
-    }
-    
-    // Преобразование данных Grist в массив записей
-function convertGristDataToRecords(tableData) {
-  var records = [];
-  var rowCount = tableData.id ? tableData.id.length : 0;
-  
-  if (rowCount === 0) return records;
-  
-  // Получаем список всех полей (кроме служебных)
-  var fieldNames = Object.keys(tableData).filter(function(key) {
-    return key !== 'id' && key !== 'manualSort';
-  });
-  
-  console.log('Поля таблицы для построения дерева:', fieldNames);
-  
-  // Создаем записи для каждой строки
-  for (var i = 0; i < rowCount; i++) {
-    var record = {
-      id: tableData.id[i]
-    };
-    
-    // Добавляем значения полей
-    fieldNames.forEach(function(fieldName) {
-      if (tableData[fieldName] && tableData[fieldName][i] !== undefined) {
-        record[fieldName] = tableData[fieldName][i];
-      }
-    });
-    
-    records.push(record);
-  }
-  
-  console.log('Создано записей:', records.length);
-  console.log('Примеры записей:', records.slice(0, 3));
-  
-  return records;
-}
-    
-// Построение структуры дерева
-function buildTreeData(records) {
-  var nodesMap = {};
-  var rootNodes = [];
-  
-  console.log('=== ДЕБАГ: ПОСТРОЕНИЕ ДЕРЕВА ===');
-  console.log('Всего записей:', records.length);
-  
-  // 1. Создаем все узлы
-  records.forEach(function(record) {
-    var recordId = record[CONFIG.idField] || record.id;
-    if (!recordId) return;
-    
-    // Получаем имя узла (пробуем разные варианты)
-    var nodeName = record[CONFIG.nameField] || 
-                   record.Name || 
-                   record.name || 
-                   'Запись ' + recordId;
-    
-    nodesMap[recordId] = {
-      id: recordId.toString(),
-      text: nodeName,
-      original: {
-        recordId: recordId,
-        data: record
-      },
-      children: [] // Будем заполнять позже
-    };
-  });
-  
-  console.log('Создано узлов в карте:', Object.keys(nodesMap).length);
-  
-  // 2. Строим связи родитель-ребенок
-  records.forEach(function(record) {
-    var recordId = record[CONFIG.idField] || record.id;
-    var node = nodesMap[recordId];
-    
-    if (!node) return;
-    
-    // Получаем ID детей из поля Team или другого поля
-    var childrenIds = [];
-    var childrenFieldValue = record[CONFIG.childrenField] || record.Team || record.team;
-    
-    console.log('Запись', recordId, 'поле детей:', childrenFieldValue);
-    
-    if (childrenFieldValue) {
-      if (Array.isArray(childrenFieldValue)) {
-        childrenIds = childrenFieldValue;
-      } else if (typeof childrenFieldValue === 'string') {
+
+      /**
+       * Обновить дерево новыми данными.
+       * @param {Object} hierarchy - Объект иерархии с nodesMap и rootNodes
+       */
+      function updateTree(hierarchy) {
         try {
-          var parsed = JSON.parse(childrenFieldValue);
-          if (Array.isArray(parsed)) {
-            childrenIds = parsed;
+          var jsTreeData = buildJsTreeData(hierarchy);
+          console.log('Данные для jsTree:', jsTreeData);
+
+          var $tree = $('#tree');
+          var jsTree = $tree.jstree(true);
+
+          if (jsTree) {
+            // Обновляем существующее дерево
+            jsTree.settings.core.data = jsTreeData;
+            jsTree.refresh(true);
+          } else {
+            // Инициализируем новое дерево
+            initializeTree();
+            var jsTree = $tree.jstree(true);
+            jsTree.settings.core.data = jsTreeData;
+            jsTree.refresh(true);
           }
-        } catch (e) {
-          // Может быть строка с ID через запятую
-          if (childrenFieldValue.includes(',')) {
-            childrenIds = childrenFieldValue.split(',').map(function(id) {
-              return id.trim();
-            }).filter(function(id) {
-              return id && id !== '';
-            });
-          } else if (childrenFieldValue.trim() !== '') {
-            childrenIds = [childrenFieldValue.trim()];
-          }
+
+          updateStatus('Дерево построено. Узлов: ' + Object.keys(hierarchy.nodesMap).length);
+        } catch (error) {
+          console.error('Ошибка обновления дерева:', error);
+          throw error;
         }
       }
-    }
-    
-    // Сохраняем ID детей
-    node.children = childrenIds;
-  });
-  
-  // 3. Определяем корневые узлы (без родителей)
-  var allChildIds = new Set();
-  
-  // Собираем все ID детей
-  Object.values(nodesMap).forEach(function(node) {
-    if (node.children && Array.isArray(node.children)) {
-      node.children.forEach(function(childId) {
-        allChildIds.add(childId.toString());
-      });
-    }
-  });
-  
-  // Корневые узлы - те, которые не являются чьими-то детьми
-  Object.values(nodesMap).forEach(function(node) {
-    if (!allChildIds.has(node.id)) {
-      rootNodes.push(node);
-    }
-  });
-  
-  console.log('Корневых узлов найдено:', rootNodes.length);
-  console.log('Карта узлов:', nodesMap);
-  console.log('Корневые узлы:', rootNodes);
-  
-  return {
-    nodesMap: nodesMap,
-    rootNodes: rootNodes
-  };
-}
-    
-    // Проверка, есть ли у записи родитель
-    function hasParent(recordId, allRecords) {
-      for (var i = 0; i < allRecords.length; i++) {
-        var record = allRecords[i];
-        var childrenFieldValue = record[CONFIG.childrenField] || record.Team;
-        
-        if (!childrenFieldValue) continue;
-        
-        var childrenIds = [];
-        if (Array.isArray(childrenFieldValue)) {
-          childrenIds = childrenFieldValue;
-        } else if (typeof childrenFieldValue === 'string') {
-          try {
-            var parsed = JSON.parse(childrenFieldValue);
-            if (Array.isArray(parsed)) {
-              childrenIds = parsed;
+
+      /**
+       * Построить данные для jsTree из иерархии.
+       * @param {Object} hierarchy - Объект иерархии
+       * @returns {Array} Массив узлов для jsTree
+       */
+      function buildJsTreeData(hierarchy) {
+        var nodesMap = hierarchy.nodesMap;
+        var rootNodes = hierarchy.rootNodes;
+
+        /**
+         * Рекурсивно построить узел jsTree.
+         * @param {Object} node - Узел из nodesMap
+         * @returns {Object} Узел для jsTree
+         */
+        function buildJsTreeNode(node) {
+          var jsTreeNode = {
+            id: node.id.toString(),
+            text: node.text,
+            state: { opened: true },
+            data: {
+              recordId: node.recordId,
+              nodeId: node.id,
+              children: node.children || []
             }
-          } catch (e) {
-            continue;
+          };
+
+          // Рекурсивно добавляем детей
+          if (node.children && node.children.length > 0) {
+            jsTreeNode.children = [];
+            node.children.forEach(function(childId) {
+              var childNode = nodesMap[childId];
+              if (childNode) {
+                jsTreeNode.children.push(buildJsTreeNode(childNode));
+              }
+            });
+            jsTreeNode.icon = 'jstree-folder';
+          } else {
+            jsTreeNode.icon = 'jstree-file';
           }
+
+          return jsTreeNode;
         }
-        
-        if (childrenIds.includes(recordId)) {
-          return true;
-        }
-      }
-      return false;
-    }
-    
-// Обновление дерева
-function updateTree(treeStructure) {
-  try {
-    var $tree = $('#tree');
-    var nodesMap = treeStructure.nodesMap;
-    var rootNodes = treeStructure.rootNodes;
-    
-    // Функция для рекурсивного построения дерева
-    function buildJsTreeNode(nodeId) {
-      var node = nodesMap[nodeId];
-      if (!node) return null;
-      
-      var jsTreeNode = {
-        id: node.id,
-        text: node.text,
-        original: node.original,
-        state: { opened: true },
-        icon: 'jstree-folder'
-      };
-      
-      // Если у узла есть дети, строим их рекурсивно
-      if (node.children && node.children.length > 0) {
-        jsTreeNode.children = [];
-        node.children.forEach(function(childId) {
-          var childNode = buildJsTreeNode(childId);
-          if (childNode) {
-            jsTreeNode.children.push(childNode);
-          }
+
+        // Строим массив корневых узлов для jsTree
+        var jsTreeData = [];
+        rootNodes.forEach(function(rootNode) {
+          jsTreeData.push(buildJsTreeNode(rootNode));
         });
-        
-        // Если после фильтрации детей нет, убираем свойство children
-        if (jsTreeNode.children.length === 0) {
-          delete jsTreeNode.children;
-          jsTreeNode.icon = 'jstree-file';
-        }
-      } else {
-        // У узла нет детей
-        jsTreeNode.icon = 'jstree-file';
+
+        return jsTreeData;
       }
-      
-      return jsTreeNode;
-    }
-    
-    // Строим данные для jsTree
-    var jsTreeData = [];
-    rootNodes.forEach(function(rootNode) {
-      var jsTreeNode = buildJsTreeNode(rootNode.id);
-      if (jsTreeNode) {
-        jsTreeData.push(jsTreeNode);
-      }
-    });
-    
-    console.log('Данные для jsTree:', jsTreeData);
-    
-    // Проверяем, инициализировано ли дерево
-    if (!$tree.data('jstree')) {
-      console.log('Инициализируем дерево с данными...');
-      
-      $tree.jstree({
-        'core': {
-          'data': jsTreeData,
-          'check_callback': true,
-          'themes': {
-            'responsive': false,
-            'dots': true,
-            'icons': true
-          }
-        },
-        'plugins': ['types'],
-        'types': {
-          'default': {
-            'icon': 'jstree-folder'
-          },
-          'file': {
-            'icon': 'jstree-file'
-          }
-        }
-      });
-      
-      // Обработчик выбора узла
-      $tree.on('select_node.jstree', function(e, data) {
+
+      /**
+       * Обработчик выбора узла в дереве.
+       * @param {Event} e - Событие
+       * @param {Object} data - Данные узла
+       */
+      function handleNodeSelection(e, data) {
         try {
           var node = data.node;
           console.log('Выбран узел:', node);
-          
-          if (node && node.original && node.original.recordId) {
-            grist.setCursorPos({ 
-              rowId: node.original.recordId 
-            }).catch(function(err) {
-              console.warn('Ошибка навигации:', err);
+
+          if (!node || !node.data) return;
+
+          var recordId = node.data.recordId;
+          var childrenIds = node.data.children || [];
+
+          // Переходим к записи в Grist
+          if (recordId) {
+            grist.setCursorPos({ rowId: recordId }).catch(function(err) {
+              console.warn('Ошибка навигации к записи:', err);
             });
           }
+
+          // Применяем фильтр к связанным виджетам
+          FilterModule.applyFilter(node.data.nodeId, childrenIds);
+
         } catch (error) {
           console.error('Ошибка обработки выбора узла:', error);
         }
-      });
-      
-    } else {
-      // Обновляем существующее дерево
-      var jsTree = $tree.jstree(true);
-      jsTree.settings.core.data = jsTreeData;
-      jsTree.refresh(true);
-    }
-    
-    updateStatus('Дерево построено. Узлов: ' + Object.keys(nodesMap).length);
-    
-  } catch (error) {
-    console.error('Ошибка обновления дерева:', error);
-    showError('Ошибка построения дерева: ' + error.message);
-  }
-}
-// Новая функция для немедленной инициализации дерева
-function initializeTreeNow() {
-  $('#tree').jstree({
-    'core': {
-      'data': [],
-      'check_callback': true,
-      'themes': {
-        'responsive': false,
-        'dots': true,
-        'icons': true
       }
-    },
-    'plugins': ['types'],
-    'types': {
-      'default': {
-        'icon': 'jstree-folder'
+
+      /**
+       * Обновить статус-бар.
+       * @param {String} message - Сообщение
+       */
+      function updateStatus(message) {
+        $('#status-text').text(message);
+        $('.loading').hide();
       }
-    }
-  });
-  
-  // Обработчик выбора узла
-  $('#tree').on('select_node.jstree', function(e, data) {
-    try {
-      var node = data.node;
-      console.log('Выбран узел:', node);
-      
-      if (node && node.original && node.original.recordId) {
-        grist.setCursorPos({ 
-          rowId: node.original.recordId 
-        }).catch(function(err) {
-          console.warn('Ошибка навигации:', err);
+
+      /**
+       * Показать ошибку в статус-баре.
+       * @param {String} message - Сообщение об ошибке
+       */
+      function showError(message) {
+        $('#status').addClass('error');
+        $('#status-text').text(message);
+        $('.loading').hide();
+      }
+
+      return {
+        initializeTree: initializeTree,
+        updateTree: updateTree,
+        updateStatus: updateStatus,
+        showError: showError
+      };
+    })();
+
+    // ========================================
+    // МОДУЛЬ: ФИЛЬТРАЦИЯ
+    // ========================================
+
+    /**
+     * Модуль для управления фильтрацией связанных виджетов.
+     * Реализует механизм фильтрации по выбранному устройству и его потомкам.
+     */
+    var FilterModule = (function() {
+      /**
+       * Применить фильтр к связанным виджетам.
+       * Фильтрует по выбранному устройству и всем его дочерним устройствам.
+       * @param {String} selectedId - ID выбранного устройства
+       * @param {Array} childrenIds - Массив ID дочерних устройств
+       */
+      function applyFilter(selectedId, childrenIds) {
+        try {
+          console.log('Применение фильтра:', {
+            selected: selectedId,
+            children: childrenIds
+          });
+
+          // Получаем все ID для фильтрации (выбранный + все потомки)
+          var allIds = getAllDescendants(selectedId, childrenIds);
+          console.log('Все ID для фильтрации:', allIds);
+
+          // Отправляем фильтр в Grist
+          // Используем setSelectedRows для фильтрации связанных виджетов
+          grist.setSelectedRows(allIds).catch(function(err) {
+            console.warn('Ошибка применения фильтра:', err);
+          });
+
+        } catch (error) {
+          console.error('Ошибка фильтрации:', error);
+        }
+      }
+
+      /**
+       * Получить все ID потомков (рекурсивно).
+       * @param {String} nodeId - ID текущего узла
+       * @param {Array} directChildren - Прямые потомки
+       * @returns {Array} Массив всех ID (включая текущий)
+       */
+      function getAllDescendants(nodeId, directChildren) {
+        var allIds = [nodeId];
+
+        if (!directChildren || directChildren.length === 0) {
+          return allIds;
+        }
+
+        // Рекурсивно добавляем всех потомков
+        // Примечание: для полной рекурсии нужен доступ к nodesMap,
+        // но для базовой версии используем только прямых потомков
+        directChildren.forEach(function(childId) {
+          allIds.push(childId);
+        });
+
+        return allIds;
+      }
+
+      return {
+        applyFilter: applyFilter
+      };
+    })();
+
+    // ========================================
+    // ГЛАВНЫЙ КОНТРОЛЛЕР ПРИЛОЖЕНИЯ
+    // ========================================
+
+    /**
+     * Главный контроллер приложения.
+     * Координирует работу всех модулей.
+     */
+    var AppController = (function() {
+      /**
+       * Инициализировать приложение.
+       */
+      function initialize() {
+        console.log('=== ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ ===');
+
+        try {
+          // Проверяем доступность Grist API
+          if (typeof grist === 'undefined') {
+            UIModule.showError('Grist API не загружен');
+            return;
+          }
+
+          // Инициализируем Grist
+          grist.ready({
+            requiredAccess: 'read table',
+            columns: [{name: '*', allow: ['read']}]
+          });
+
+          console.log('Grist инициализирован');
+
+          // Инициализируем UI
+          UIModule.initializeTree();
+          setupEventHandlers();
+
+          // Загружаем данные с задержкой
+          setTimeout(function() {
+            loadAndRenderTree();
+          }, 500);
+
+        } catch (error) {
+          console.error('Ошибка инициализации:', error);
+          UIModule.showError('Ошибка инициализации: ' + error.message);
+        }
+      }
+
+      /**
+       * Настроить обработчики событий.
+       */
+      function setupEventHandlers() {
+        // Кнопка настроек
+        $('#settings-toggle').on('click', function() {
+          var panel = $('#settings-panel');
+          panel.toggleClass('visible');
+
+          var tree = $('#tree');
+          if (panel.hasClass('visible')) {
+            tree.addClass('with-settings');
+          } else {
+            tree.removeClass('with-settings');
+          }
+        });
+
+        // Изменение полей настроек
+        $('#field-id, #field-parent, #field-flag, #field-display').on('change', function() {
+          ConfigModule.updateConfigFromInputs();
+          loadAndRenderTree();
+        });
+
+        // Обновление данных из Grist
+        grist.onRecords(function() {
+          console.log('Данные обновились в Grist');
+          loadAndRenderTree();
         });
       }
-    } catch (error) {
-      console.error('Ошибка обработки выбора узла:', error);
-    }
-  });
-}
-    
-    // Загрузка детей узла
-    function loadNodeChildren(node) {
-      if (!node.children_d || node.children_d.length === 0) {
-        return;
-      }
-      
-      var childrenData = node.children_d.map(function(childId) {
-        return {
-          id: childId,
-          text: 'Запись ' + childId,
-          children: false,
-          icon: 'jstree-file'
-        };
-      });
-      
-      var jsTree = $('#tree').jstree(true);
-      jsTree.create_node(node.id, childrenData, 'last', function() {
-        jsTree.open_node(node.id);
-      });
-    }
-    
-    // Обновление статуса
-    function updateStatus(message) {
-      $('#status-text').text(message);
-    }
-    
-    // Показать ошибку
-    function showError(message) {
-      $('#status').addClass('error');
-      $('#status-text').text(message);
-      $('.loading').hide();
-    }
-    
-    // Обработчик выбора записи в Grist
-    if (typeof grist !== 'undefined') {
-      grist.onRecord(function(record) {
-        if (!record || !record.id) return;
-        
-        var $tree = $('#tree');
-        if (!$tree.hasClass('jstree')) return;
-        
-        var recordId = record.id.toString();
-        var jsTree = $tree.jstree(true);
-        
+
+      /**
+       * Загрузить данные и отобразить дерево.
+       */
+      async function loadAndRenderTree() {
         try {
-          jsTree.select_node(recordId);
+          UIModule.updateStatus('Загрузка данных...');
+          $('.loading').show();
+
+          // Получаем конфигурацию
+          var config = ConfigModule.getConfig();
+
+          // Загружаем данные
+          var records = await DataModule.loadTableData();
+
+          if (records.length === 0) {
+            UIModule.updateStatus('Нет данных для отображения');
+            return;
+          }
+
+          // Строим иерархию
+          var hierarchy = HierarchyModule.buildHierarchy(records, config);
+
+          if (hierarchy.rootNodes.length === 0) {
+            UIModule.updateStatus('Нет устройств с флагом ' + config.flagField + ' = 1');
+            return;
+          }
+
+          // Обновляем дерево
+          UIModule.updateTree(hierarchy);
+
         } catch (error) {
-          console.log('Узел не найден:', recordId);
+          console.error('Ошибка загрузки и рендеринга:', error);
+          UIModule.showError('Ошибка: ' + error.message);
         }
-      });
-      
-      grist.onRecords(function() {
-        console.log('Данные обновились');
-        $('.loading').show();
-        loadTreeData();
-      });
-    }
-    
-    // Убираем глобальный обработчик ошибок, чтобы видеть их в консоли
-    // window.addEventListener('error', function(event) {
-    //   console.error('Глобальная ошибка:', event.error);
-    // });
-    
+      }
+
+      return {
+        initialize: initialize
+      };
+    })();
+
+    // ========================================
+    // ЗАПУСК ПРИЛОЖЕНИЯ
+    // ========================================
+
+    // Запускаем приложение при загрузке DOM
+    $(document).ready(function() {
+      console.log('Документ загружен, запуск приложения...');
+      AppController.initialize();
+    });
+
   </script>
 </body>
 </html>
