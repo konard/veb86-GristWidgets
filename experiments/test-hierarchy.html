@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Тест построения иерархии устройств</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    h1 { color: #333; }
+    h2 { color: #666; margin-top: 30px; }
+    .section {
+      background: #f8f9fa;
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 5px;
+      border-left: 4px solid #007bff;
+    }
+    pre {
+      background: white;
+      padding: 10px;
+      border-radius: 3px;
+      overflow-x: auto;
+    }
+    .success { color: #28a745; }
+    .error { color: #dc3545; }
+    .test-result {
+      margin: 10px 0;
+      padding: 10px;
+      border-radius: 3px;
+    }
+    .test-result.pass {
+      background: #d4edda;
+      border: 1px solid #c3e6cb;
+    }
+    .test-result.fail {
+      background: #f8d7da;
+      border: 1px solid #f5c6cb;
+    }
+  </style>
+</head>
+<body>
+  <h1>🧪 Эксперимент: Тестирование построения иерархии устройств</h1>
+
+  <div class="section">
+    <h2>Описание теста</h2>
+    <p>Проверяем алгоритм построения иерархического дерева из виджета widget/tree</p>
+    <p>Тестируем следующие сценарии:</p>
+    <ul>
+      <li>Фильтрация по флагу icanbeheadunit</li>
+      <li>Построение связей родитель-ребенок</li>
+      <li>Определение корневых узлов</li>
+      <li>Обработка циклических ссылок</li>
+    </ul>
+  </div>
+
+  <div id="results"></div>
+
+  <script>
+    // ========================================
+    // КОПИЯ МОДУЛЯ: ПОСТРОЕНИЕ ИЕРАРХИИ
+    // (из widget/tree/index.html)
+    // ========================================
+
+    var HierarchyModule = (function() {
+      function buildHierarchy(records, config) {
+        console.log('=== ПОСТРОЕНИЕ ИЕРАРХИИ ===');
+        console.log('Всего записей:', records.length);
+        console.log('Конфигурация:', config);
+
+        var filteredRecords = filterRecordsByFlag(records, config);
+        console.log('После фильтрации по флагу:', filteredRecords.length);
+
+        var nodesMap = createNodesMap(filteredRecords, config);
+        console.log('Создано узлов:', Object.keys(nodesMap).length);
+
+        linkParentChild(nodesMap, filteredRecords, config);
+
+        var rootNodes = findRootNodes(nodesMap, config);
+        console.log('Найдено корневых узлов:', rootNodes.length);
+
+        handleCyclicReferences(nodesMap, rootNodes);
+
+        return {
+          nodesMap: nodesMap,
+          rootNodes: rootNodes
+        };
+      }
+
+      function filterRecordsByFlag(records, config) {
+        return records.filter(function(record) {
+          var flagValue = record[config.flagField];
+          return flagValue == 1 || flagValue === true;
+        });
+      }
+
+      function createNodesMap(records, config) {
+        var nodesMap = {};
+
+        records.forEach(function(record) {
+          var nodeId = record[config.idField];
+          if (!nodeId) return;
+
+          var displayText = record[config.displayField] || nodeId;
+
+          nodesMap[nodeId] = {
+            id: nodeId,
+            text: displayText,
+            parentId: null,
+            children: [],
+            recordId: record.id,
+            data: record
+          };
+        });
+
+        return nodesMap;
+      }
+
+      function linkParentChild(nodesMap, records, config) {
+        records.forEach(function(record) {
+          var nodeId = record[config.idField];
+          var parentId = record[config.parentField];
+
+          if (!nodeId || !parentId) return;
+
+          var node = nodesMap[nodeId];
+          var parentNode = nodesMap[parentId];
+
+          if (node && parentNode) {
+            node.parentId = parentId;
+
+            if (parentNode.children.indexOf(nodeId) === -1) {
+              parentNode.children.push(nodeId);
+            }
+          }
+        });
+      }
+
+      function findRootNodes(nodesMap, config) {
+        var rootNodes = [];
+
+        Object.values(nodesMap).forEach(function(node) {
+          if (!node.parentId || !nodesMap[node.parentId]) {
+            rootNodes.push(node);
+          }
+        });
+
+        return rootNodes;
+      }
+
+      function handleCyclicReferences(nodesMap, rootNodes) {
+        var visited = new Set();
+        var recursionStack = new Set();
+
+        function hasCycle(nodeId) {
+          if (recursionStack.has(nodeId)) {
+            console.warn('Обнаружен цикл в узле:', nodeId);
+            return true;
+          }
+
+          if (visited.has(nodeId)) {
+            return false;
+          }
+
+          visited.add(nodeId);
+          recursionStack.add(nodeId);
+
+          var node = nodesMap[nodeId];
+          if (node && node.children) {
+            for (var i = 0; i < node.children.length; i++) {
+              if (hasCycle(node.children[i])) {
+                return true;
+              }
+            }
+          }
+
+          recursionStack.delete(nodeId);
+          return false;
+        }
+
+        rootNodes.forEach(function(rootNode) {
+          hasCycle(rootNode.id);
+        });
+      }
+
+      return {
+        buildHierarchy: buildHierarchy
+      };
+    })();
+
+    // ========================================
+    // ТЕСТОВЫЕ ДАННЫЕ
+    // ========================================
+
+    var config = {
+      idField: "NMO_BaseName",
+      parentField: "HeadDeviceName",
+      flagField: "icanbeheadunit",
+      displayField: "NMO_BaseName"
+    };
+
+    // Тест 1: Простая иерархия
+    var testData1 = [
+      { id: 1, NMO_BaseName: "Device_A", HeadDeviceName: null, icanbeheadunit: 1 },
+      { id: 2, NMO_BaseName: "Device_B", HeadDeviceName: "Device_A", icanbeheadunit: 1 },
+      { id: 3, NMO_BaseName: "Device_C", HeadDeviceName: "Device_A", icanbeheadunit: 1 },
+      { id: 4, NMO_BaseName: "Device_D", HeadDeviceName: "Device_B", icanbeheadunit: 1 },
+    ];
+
+    // Тест 2: С фильтрацией по флагу
+    var testData2 = [
+      { id: 1, NMO_BaseName: "Device_A", HeadDeviceName: null, icanbeheadunit: 1 },
+      { id: 2, NMO_BaseName: "Device_B", HeadDeviceName: "Device_A", icanbeheadunit: 1 },
+      { id: 3, NMO_BaseName: "Device_C", HeadDeviceName: "Device_A", icanbeheadunit: 0 }, // исключен
+      { id: 4, NMO_BaseName: "Device_D", HeadDeviceName: "Device_B", icanbeheadunit: 1 },
+    ];
+
+    // Тест 3: Множественные корни
+    var testData3 = [
+      { id: 1, NMO_BaseName: "Root1", HeadDeviceName: null, icanbeheadunit: 1 },
+      { id: 2, NMO_BaseName: "Root2", HeadDeviceName: null, icanbeheadunit: 1 },
+      { id: 3, NMO_BaseName: "Child1", HeadDeviceName: "Root1", icanbeheadunit: 1 },
+      { id: 4, NMO_BaseName: "Child2", HeadDeviceName: "Root2", icanbeheadunit: 1 },
+    ];
+
+    // Тест 4: Глубокая иерархия
+    var testData4 = [
+      { id: 1, NMO_BaseName: "Level_1", HeadDeviceName: null, icanbeheadunit: 1 },
+      { id: 2, NMO_BaseName: "Level_2", HeadDeviceName: "Level_1", icanbeheadunit: 1 },
+      { id: 3, NMO_BaseName: "Level_3", HeadDeviceName: "Level_2", icanbeheadunit: 1 },
+      { id: 4, NMO_BaseName: "Level_4", HeadDeviceName: "Level_3", icanbeheadunit: 1 },
+      { id: 5, NMO_BaseName: "Level_5", HeadDeviceName: "Level_4", icanbeheadunit: 1 },
+    ];
+
+    // ========================================
+    // ФУНКЦИИ ТЕСТИРОВАНИЯ
+    // ========================================
+
+    function runTest(testName, testData, expectedRoots, expectedTotalNodes) {
+      console.log('\n' + '='.repeat(50));
+      console.log('ТЕСТ:', testName);
+      console.log('='.repeat(50));
+
+      try {
+        var result = HierarchyModule.buildHierarchy(testData, config);
+
+        var actualRoots = result.rootNodes.length;
+        var actualNodes = Object.keys(result.nodesMap).length;
+
+        var rootsMatch = actualRoots === expectedRoots;
+        var nodesMatch = actualNodes === expectedTotalNodes;
+
+        var testPassed = rootsMatch && nodesMatch;
+
+        console.log('Результат:');
+        console.log('  Корневых узлов:', actualRoots, rootsMatch ? '✓' : '✗ ожидалось ' + expectedRoots);
+        console.log('  Всего узлов:', actualNodes, nodesMatch ? '✓' : '✗ ожидалось ' + expectedTotalNodes);
+
+        return {
+          name: testName,
+          passed: testPassed,
+          details: {
+            rootNodes: actualRoots,
+            expectedRoots: expectedRoots,
+            totalNodes: actualNodes,
+            expectedNodes: expectedTotalNodes
+          },
+          hierarchy: result
+        };
+      } catch (error) {
+        console.error('ОШИБКА в тесте:', error);
+        return {
+          name: testName,
+          passed: false,
+          error: error.message
+        };
+      }
+    }
+
+    function visualizeHierarchy(hierarchy) {
+      var lines = [];
+
+      function printNode(node, nodesMap, prefix, isLast) {
+        var connector = isLast ? '└── ' : '├── ';
+        lines.push(prefix + connector + node.text + ' [' + node.id + ']');
+
+        var children = node.children || [];
+        children.forEach(function(childId, index) {
+          var childNode = nodesMap[childId];
+          if (childNode) {
+            var newPrefix = prefix + (isLast ? '    ' : '│   ');
+            var childIsLast = index === children.length - 1;
+            printNode(childNode, nodesMap, newPrefix, childIsLast);
+          }
+        });
+      }
+
+      hierarchy.rootNodes.forEach(function(rootNode, index) {
+        var isLast = index === hierarchy.rootNodes.length - 1;
+        printNode(rootNode, hierarchy.nodesMap, '', isLast);
+      });
+
+      return lines.join('\n');
+    }
+
+    // ========================================
+    // ЗАПУСК ТЕСТОВ
+    // ========================================
+
+    var resultsDiv = document.getElementById('results');
+
+    var tests = [
+      { name: 'Тест 1: Простая иерархия', data: testData1, roots: 1, nodes: 4 },
+      { name: 'Тест 2: Фильтрация по флагу', data: testData2, roots: 1, nodes: 3 },
+      { name: 'Тест 3: Множественные корни', data: testData3, roots: 2, nodes: 4 },
+      { name: 'Тест 4: Глубокая иерархия', data: testData4, roots: 1, nodes: 5 }
+    ];
+
+    var allPassed = true;
+
+    tests.forEach(function(test) {
+      var result = runTest(test.name, test.data, test.roots, test.nodes);
+
+      if (!result.passed) {
+        allPassed = false;
+      }
+
+      var testDiv = document.createElement('div');
+      testDiv.className = 'section';
+
+      var title = document.createElement('h2');
+      title.textContent = test.name + (result.passed ? ' ✅ ПРОЙДЕН' : ' ❌ НЕ ПРОЙДЕН');
+      title.className = result.passed ? 'success' : 'error';
+      testDiv.appendChild(title);
+
+      if (result.error) {
+        var errorDiv = document.createElement('div');
+        errorDiv.className = 'test-result fail';
+        errorDiv.innerHTML = '<strong>Ошибка:</strong> ' + result.error;
+        testDiv.appendChild(errorDiv);
+      } else {
+        var detailsDiv = document.createElement('div');
+        detailsDiv.className = 'test-result ' + (result.passed ? 'pass' : 'fail');
+        detailsDiv.innerHTML =
+          '<strong>Детали:</strong><br>' +
+          'Корневых узлов: ' + result.details.rootNodes + ' (ожидалось: ' + result.details.expectedRoots + ')<br>' +
+          'Всего узлов: ' + result.details.totalNodes + ' (ожидалось: ' + result.details.expectedNodes + ')';
+        testDiv.appendChild(detailsDiv);
+
+        if (result.hierarchy) {
+          var treeDiv = document.createElement('div');
+          treeDiv.innerHTML = '<strong>Визуализация дерева:</strong>';
+          var treePre = document.createElement('pre');
+          treePre.textContent = visualizeHierarchy(result.hierarchy);
+          treeDiv.appendChild(treePre);
+          testDiv.appendChild(treeDiv);
+        }
+      }
+
+      resultsDiv.appendChild(testDiv);
+    });
+
+    // Итоговый результат
+    var summaryDiv = document.createElement('div');
+    summaryDiv.className = 'section';
+    var summaryTitle = document.createElement('h2');
+    summaryTitle.textContent = allPassed ? '🎉 Все тесты пройдены!' : '⚠️ Некоторые тесты не пройдены';
+    summaryTitle.className = allPassed ? 'success' : 'error';
+    summaryDiv.appendChild(summaryTitle);
+    resultsDiv.insertBefore(summaryDiv, resultsDiv.firstChild);
+
+    console.log('\n' + '='.repeat(50));
+    console.log('ИТОГО:', allPassed ? 'ВСЕ ТЕСТЫ ПРОЙДЕНЫ' : 'ЕСТЬ ПРОВАЛЫ');
+    console.log('='.repeat(50));
+  </script>
+</body>
+</html>
