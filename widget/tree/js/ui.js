@@ -244,15 +244,22 @@ var UIModule = (function() {
 
     allIds = allIds.concat(descendants);
 
+    // Получаем текущую конфигурацию для информации о целевой таблице (для отладки)
+    var config = ConfigModule.getConfig();
+    var targetTable = config.targetTable;
+
+    if (targetTable && targetTable.trim()) {
+      console.info('Выбрана целевая таблица для фильтрации (в настоящее время фильтрация применяется к текущей таблице):', targetTable);
+    }
+
     console.log('Применение фильтра:', {
       selected: nodeId,
       descendants: descendants,
-      total: allIds.length,
-      targetTable: targetTable || 'текущая таблица'
+      total: allIds.length
     });
 
-    // Отправляем фильтр в Grist с указанием целевой таблицы
-    GristAPIModule.applyFilter(allIds, targetTable).catch(function(err) {
+    // Отправляем фильтр в Grist (фильтрация применяется к текущей таблице)
+    GristAPIModule.applyFilter(allIds).catch(function(err) {
       console.warn('Ошибка применения фильтра:', err);
     });
   }

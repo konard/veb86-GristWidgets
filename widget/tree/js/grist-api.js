@@ -284,33 +284,24 @@ var GristAPIModule = (function() {
   // ========================================
 
   /**
-   * Применить фильтр к связанным виджетам
+   * Применить фильтр к текущей таблице
    *
    * Устанавливает выбранные строки, что влияет на фильтрацию
-   * связанных виджетов в Grist.
+   * текущей таблицы и связанных виджетов в Grist.
+   * Основано на официальных примерах из https://github.com/gristlabs/grist-widget
    *
    * @param {Array<string|number>} recordIds - Массив ID записей
-   * @param {string} targetTable - Имя целевой таблицы для фильтрации (опционально)
    * @returns {Promise<void>}
    */
-  function applyFilter(recordIds, targetTable) {
+  function applyFilter(recordIds) {
     if (!checkInitialized()) {
       return Promise.reject(new Error('Grist API не инициализирован'));
     }
 
-    console.log('Применение фильтра к записям:', recordIds, 'в таблице:', targetTable || 'текущей');
+    console.log('Применение фильтра к записям:', recordIds);
 
-    // В текущей реализации Grist Plugin API setSelectedRows применяет фильтр
-    // к текущей таблице, а не к произвольной. Это ограничение API.
-    // В будущем, при наличии соответствующих методов в API, здесь можно будет
-    // реализовать переключение между таблицами и фильтрацию конкретной таблицы.
-
-    // Если целевая таблица указана (но мы не можем проверить, отличается ли она от текущей из-за ограничений API)
-    if (targetTable && targetTable.trim()) {
-      console.warn(`Внимание: Grist Plugin API не поддерживает фильтрацию произвольной таблицы "${targetTable}". Фильтр будет применен к текущей таблице.`);
-    }
-
-    // Применяем фильтр к текущей таблице
+    // В официальных виджетах Grist используется setSelectedRows для фильтрации
+    // текущей таблицы. Это основной способ фильтрации в Grist Plugin API.
     return grist.setSelectedRows(recordIds)
       .catch(function(error) {
         console.warn('Ошибка применения фильтра:', error);
