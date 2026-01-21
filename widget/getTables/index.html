@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Get Tables Widget</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        th {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            font-size: 18px;
+        }
+        
+        .error {
+            color: red;
+            text-align: center;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Table List</h1>
+    <div id="loading" class="loading">Loading tables...</div>
+    <div id="error" class="error" style="display: none;"></div>
+    <table id="tablesTable" style="display: none;">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Primary View ID</th>
+            </tr>
+        </thead>
+        <tbody id="tablesBody">
+        </tbody>
+    </table>
+
+    <!-- Load Grist widget API -->
+    <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+    
+    <script>
+        // Wait for Grist API to be ready
+        window.addEventListener('load', async () => {
+            try {
+                // Wait for grist object to be available
+                await new Promise((resolve) => {
+                    const checkGrist = () => {
+                        if (window.grist) {
+                            // Initialize the widget
+                            grist.ready();
+                            resolve();
+                        } else {
+                            setTimeout(checkGrist, 100);
+                        }
+                    };
+                    checkGrist();
+                });
+
+                // Get table list from Grist
+                const tables = await grist.docApi.fetchTable('_grist_Tables');
+
+                // Hide loading message
+                document.getElementById('loading').style.display = 'none';
+
+                // Get the table body element
+                const tableBody = document.getElementById('tablesBody');
+
+                // Check if we have data
+                if (tables && tables.id && Array.isArray(tables.id)) {
+                    // Populate the table with data
+                    for (let i = 0; i < tables.id.length; i++) {
+                        const id = tables.id[i];
+                        const name = tables.tableId[i] || 'N/A';
+                        const primaryViewId = tables.primaryViewId[i] || 'N/A';
+
+                        const row = document.createElement('tr');
+
+                        const idCell = document.createElement('td');
+                        idCell.textContent = id;
+                        row.appendChild(idCell);
+
+                        const nameCell = document.createElement('td');
+                        nameCell.textContent = name;
+                        row.appendChild(nameCell);
+
+                        const primaryViewIdCell = document.createElement('td');
+                        primaryViewIdCell.textContent = primaryViewId;
+                        row.appendChild(primaryViewIdCell);
+
+                        tableBody.appendChild(row);
+                    }
+                } else {
+                    // Handle case where no tables are found
+                    const row = document.createElement('tr');
+                    const cell = document.createElement('td');
+                    cell.setAttribute('colspan', '3');
+                    cell.textContent = 'No tables found';
+                    cell.style.textAlign = 'center';
+                    row.appendChild(cell);
+                    tableBody.appendChild(row);
+                }
+
+                // Show the table
+                document.getElementById('tablesTable').style.display = 'table';
+
+            } catch (error) {
+                console.error('Error fetching tables:', error);
+                document.getElementById('loading').style.display = 'none';
+                const errorDiv = document.getElementById('error');
+                errorDiv.style.display = 'block';
+                errorDiv.textContent = `Error loading tables: ${error.message}`;
+            }
+        });
+    </script>
+</body>
+</html>
