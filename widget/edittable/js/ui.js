@@ -96,54 +96,113 @@ var UIModule = (function() {
    * @param {Object} tableData - Данные таблицы из Grist
    */
   function displayTableData(tableData) {
-    // Очищаем таблицу
-    $tableHeader.empty();
-    $tableBody.empty();
+    clearTable();
 
-    if (!tableData || !tableData.id || tableData.id.length === 0) {
-      // Пустая таблица
-      $tableHeader.append('<th>Нет данных</th>');
-      $tableBody.append('<tr><td>Таблица пуста</td></tr>');
+    if (isTableEmpty(tableData)) {
+      displayEmptyTable();
       return;
     }
 
-    // Получаем список полей (исключаем служебные)
-    var fieldNames = Object.keys(tableData).filter(function(key) {
+    var fieldNames = getFieldNames(tableData);
+    createTableHeaders(fieldNames);
+    createTableRows(tableData, fieldNames);
+    initializeTabledit(fieldNames);
+    showAddButton();
+
+    console.log('Данные таблицы отображены');
+  }
+
+  /**
+   * Очистить таблицу от предыдущих данных
+   */
+  function clearTable() {
+    $tableHeader.empty();
+    $tableBody.empty();
+  }
+
+  /**
+   * Проверить, пуста ли таблица
+   *
+   * @param {Object} tableData - Данные таблицы
+   * @returns {boolean} true, если таблица пуста
+   */
+  function isTableEmpty(tableData) {
+    return !tableData || !tableData.id || tableData.id.length === 0;
+  }
+
+  /**
+   * Отобразить пустую таблицу
+   */
+  function displayEmptyTable() {
+    $tableHeader.append('<th>Нет данных</th>');
+    $tableBody.append('<tr><td>Таблица пуста</td></tr>');
+  }
+
+  /**
+   * Получить список полей таблицы
+   *
+   * @param {Object} tableData - Данные таблицы
+   * @returns {Array} Список имен полей
+   */
+  function getFieldNames(tableData) {
+    return Object.keys(tableData).filter(function(key) {
       return key !== 'id' && key !== 'manualSort';
     });
+  }
 
-    // Создаем заголовки
+  /**
+   * Создать заголовки таблицы
+   *
+   * @param {Array} fieldNames - Список имен полей
+   */
+  function createTableHeaders(fieldNames) {
     var $headerRow = $('<tr>');
-    $headerRow.append('<th>ID</th>'); // Добавляем колонку ID
+    $headerRow.append('<th>ID</th>');
     fieldNames.forEach(function(fieldName) {
       $headerRow.append('<th>' + fieldName + '</th>');
     });
     $tableHeader.append($headerRow);
+  }
 
-    // Создаем строки данных
+  /**
+   * Создать строки данных таблицы
+   *
+   * @param {Object} tableData - Данные таблицы
+   * @param {Array} fieldNames - Список имен полей
+   */
+  function createTableRows(tableData, fieldNames) {
     for (var i = 0; i < tableData.id.length; i++) {
-      var $row = $('<tr>');
-      $row.attr('data-id', tableData.id[i]);
-
-      // Добавляем ID
-      $row.append('<td>' + tableData.id[i] + '</td>');
-
-      // Добавляем значения полей
-      fieldNames.forEach(function(fieldName) {
-        var value = tableData[fieldName] ? tableData[fieldName][i] : '';
-        $row.append('<td>' + (value || '') + '</td>');
-      });
-
+      var $row = createTableRow(tableData, fieldNames, i);
       $tableBody.append($row);
     }
+  }
 
-    // Инициализируем Tabledit для редактирования
-    initializeTabledit(fieldNames);
+  /**
+   * Создать одну строку таблицы
+   *
+   * @param {Object} tableData - Данные таблицы
+   * @param {Array} fieldNames - Список имен полей
+   * @param {number} index - Индекс строки
+   * @returns {jQuery} jQuery объект строки
+   */
+  function createTableRow(tableData, fieldNames, index) {
+    var $row = $('<tr>');
+    $row.attr('data-id', tableData.id[index]);
+    $row.append('<td>' + tableData.id[index] + '</td>');
 
-    // Показываем кнопку добавления записи
+    fieldNames.forEach(function(fieldName) {
+      var value = tableData[fieldName] ? tableData[fieldName][index] : '';
+      $row.append('<td>' + (value || '') + '</td>');
+    });
+
+    return $row;
+  }
+
+  /**
+   * Показать кнопку добавления записи
+   */
+  function showAddButton() {
     $addRecordBtn.show();
-
-    console.log('Данные таблицы отображены');
   }
 
   /**
