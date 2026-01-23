@@ -19,6 +19,7 @@ var UIModule = (function() {
   var $tableHeader = null; // Заголовок таблицы
   var $tableBody = null; // Тело таблицы
   var $status = null; // Элемент статуса
+  var $addRecordBtn = null; // Кнопка добавления записи
 
   // ========================================
   // ИНИЦИАЛИЗАЦИЯ
@@ -33,6 +34,7 @@ var UIModule = (function() {
     $tableHeader = $('#table-header');
     $tableBody = $('#table-body');
     $status = $('#status-text');
+    $addRecordBtn = $('#add-record-btn');
 
     // Привязываем обработчики событий
     bindEvents();
@@ -48,6 +50,10 @@ var UIModule = (function() {
       var tableId = $(this).val();
       ConfigModule.setSelectedTableId(tableId);
       AppModule.loadSelectedTable();
+    });
+
+    $addRecordBtn.on('click', function() {
+      addNewRecord();
     });
   }
 
@@ -73,6 +79,9 @@ var UIModule = (function() {
         text: table.tableId
       }));
     });
+
+    // Скрываем кнопку добавления, пока таблица не выбрана
+    $addRecordBtn.hide();
 
     console.log('Список таблиц обновлен');
   }
@@ -131,6 +140,9 @@ var UIModule = (function() {
     // Инициализируем Tabledit для редактирования
     initializeTabledit(fieldNames);
 
+    // Показываем кнопку добавления записи
+    $addRecordBtn.show();
+
     console.log('Данные таблицы отображены');
   }
 
@@ -158,7 +170,7 @@ var UIModule = (function() {
     // Инициализируем Tabledit
     $table.tabledit({
       url: '', // Не используем URL, обрабатываем изменения вручную
-      columns: columns.editable,
+      columns: columns,
       onDraw: function() {
         console.log('Tabledit инициализирован');
       },
@@ -224,6 +236,44 @@ var UIModule = (function() {
         updateStatus('Ошибка: ' + error.message);
       });
     }
+  }
+
+  /**
+   * Добавить новую запись
+   */
+  function addNewRecord() {
+    var tableId = ConfigModule.getSelectedTableId();
+    if (!tableId) {
+      updateStatus('Сначала выберите таблицу');
+      return;
+    }
+
+    // Получаем текущие данные для определения полей
+    var currentData = GristAPIModule.getCurrentTableData();
+    if (!currentData) {
+      updateStatus('Нет данных таблицы');
+      return;
+    }
+
+    // Получаем список полей
+    var fieldNames = Object.keys(currentData).filter(function(key) {
+      return key !== 'id' && key !== 'manualSort';
+    });
+
+    // Создаем объект с пустыми значениями
+    var newRecord = {};
+    fieldNames.forEach(function(field) {
+      newRecord[field] = '';
+    });
+
+    // Добавляем запись
+    GristAPIModule.addNewRecord(tableId, newRecord).then(function() {
+      updateStatus('Новая запись добавлена');
+      // Перезагружаем таблицу
+      AppModule.loadSelectedTable();
+    }).catch(function(error) {
+      updateStatus('Ошибка добавления записи: ' + error.message);
+    });
   }
 
   // ========================================
