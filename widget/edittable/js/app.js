@@ -1,21 +1,37 @@
 /**
+<<<<<<< HEAD
  * Главный модуль приложения для редактируемой таблицы
  *
  * Этот модуль координирует работу всех других модулей и управляет
  * основным потоком приложения.
+=======
+ * Главный модуль приложения
+ *
+ * Этот модуль инициализирует все компоненты виджета
+ * и управляет общим потоком выполнения.
+>>>>>>> origin/main
  *
  * @module AppModule
  */
 
+<<<<<<< HEAD
 var AppModule = (function() {
   'use strict';
 
   // ========================================
   // ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
+=======
+var AppModule = (function(UIModule, GristApiModule) {
+  'use strict';
+
+  // ========================================
+  // ПУБЛИЧНЫЕ МЕТОДЫ
+>>>>>>> origin/main
   // ========================================
 
   /**
    * Инициализировать приложение
+<<<<<<< HEAD
    *
    * Эта функция вызывается при загрузке страницы и запускает
    * инициализацию всех модулей.
@@ -81,6 +97,23 @@ var AppModule = (function() {
     }).catch(function(error) {
       UIModule.showError('Не удалось загрузить данные таблицы: ' + error.message);
     });
+=======
+   */
+  function initializeApp() {
+    console.log('Инициализация виджета редактируемой таблицы...');
+
+    // Инициализировать Grist API
+    GristApiModule.initializeGrist();
+
+    // Инициализировать пользовательский интерфейс
+    UIModule.initializeUI();
+
+    // Загрузить список таблиц
+    // Добавим небольшую задержку, чтобы гарантировать готовность Grist API
+    setTimeout(() => {
+      UIModule.loadTables();
+    }, 500);
+>>>>>>> origin/main
   }
 
   // ========================================
@@ -88,6 +121,7 @@ var AppModule = (function() {
   // ========================================
 
   return {
+<<<<<<< HEAD
     initialize: initialize,
     loadAvailableTables: loadAvailableTables,
     loadSelectedTable: loadSelectedTable
@@ -101,4 +135,13 @@ var AppModule = (function() {
 // Запускаем приложение при загрузке страницы
 $(document).ready(function() {
   AppModule.initialize();
+=======
+    initializeApp: initializeApp
+  };
+})(UIModule, GristApiModule);
+
+// Инициализировать приложение при загрузке DOM
+document.addEventListener('DOMContentLoaded', function() {
+  AppModule.initializeApp();
+>>>>>>> origin/main
 });
