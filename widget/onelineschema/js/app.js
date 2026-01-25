@@ -24,22 +24,18 @@ var AppModule = (function() {
    * Обновить схему на основе текущих данных
    */
   async function updateSchema() {
+    const tableName = 'schema'; // Фиксированное имя таблицы
+
     try {
       const config = ConfigModule.getConfig();
 
-      // Проверяем, указана ли таблица в конфигурации
-      if (!config.table) {
-        UIModule.showStatusMessage('Не указана таблица для визуализации', 'error');
-        return;
-      }
-
-      // Загружаем данные из указанной таблицы
-      const data = await DataModule.loadData(config.table);
+      // Загружаем данные из фиксированной таблицы
+      const data = await DataModule.loadData(tableName);
 
       // Отрисовываем схему
       SchemaModule.drawSchema(data, config);
 
-      UIModule.showStatusMessage(`Схема успешно обновлена из таблицы "${config.table}"`, 'success');
+      UIModule.showStatusMessage(`Схема успешно обновлена из таблицы "${tableName}"`, 'success');
     } catch (error) {
       console.error('Ошибка обновления схемы:', error);
       UIModule.showStatusMessage(`Ошибка обновления схемы: ${error.message}`, 'error');
@@ -75,11 +71,6 @@ var AppModule = (function() {
 
     // Инициализируем UI
     UIModule.initializeUI();
-
-    // Загружаем список таблиц
-    setTimeout(() => {
-      UIModule.loadTables();
-    }, 500);
 
     // Инициализируем Grist API
     grist.ready({

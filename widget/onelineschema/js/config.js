@@ -30,13 +30,11 @@ var ConfigModule = (function() {
   var config = {
     layout: DEFAULT_LAYOUT,
     scale: DEFAULT_SCALE,
-    groupByFeeder: DEFAULT_GROUP_BY_FEEDER,
-    table: DEFAULT_TABLE
+    groupByFeeder: DEFAULT_GROUP_BY_FEEDER
   };
 
   // Значения по умолчанию для настроек
   var defaultOptions = {
-    table: DEFAULT_TABLE,
     layout: DEFAULT_LAYOUT,
     groupByFeeder: DEFAULT_GROUP_BY_FEEDER,
     scale: DEFAULT_SCALE
@@ -75,7 +73,7 @@ var ConfigModule = (function() {
    * @param {*} value - Новое значение
    */
   function setConfigValue(fieldName, value) {
-    if (config.hasOwnProperty(fieldName)) {
+    if (config.hasOwnProperty(fieldName) && fieldName !== 'table') {
       config[fieldName] = value;
       console.log('Поле конфигурации обновлено:', fieldName, '=', value);
     }
@@ -89,7 +87,7 @@ var ConfigModule = (function() {
     if (newConfig && typeof newConfig === 'object') {
       // Обновляем только те поля, которые существуют в нашей конфигурации
       Object.keys(config).forEach(function(key) {
-        if (newConfig.hasOwnProperty(key)) {
+        if (newConfig.hasOwnProperty(key) && key !== 'table') { // Игнорируем поле table
           config[key] = newConfig[key];
         }
       });

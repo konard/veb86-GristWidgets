@@ -58,80 +58,43 @@ var UIModule = (function(DataModule, SchemaModule, ConfigModule) {
    * Инициализировать интерфейс
    */
   function initializeUI() {
-    // Обработчик изменения выбора таблицы
-    document.getElementById('table-select').addEventListener('change', function() {
-      const selectedTableName = this.value;
-      if (selectedTableName) {
-        // Обновляем конфигурацию с выбранной таблицей
-        const currentConfig = ConfigModule.getConfig();
-        currentConfig.table = selectedTableName;
-        ConfigModule.setConfig(currentConfig);
-        
-        // Загружаем данные и обновляем схему
-        loadAndDisplaySchema(selectedTableName);
-      } else {
-        // Очищаем схему если таблица не выбрана
-        SchemaModule.clearSchema();
-      }
-    });
+    console.log('UI инициализирован');
   }
 
   /**
-   * Загрузить список таблиц
+   * Загрузить список доступных таблиц
    */
   async function loadTables() {
     try {
-      const statusMessage = document.getElementById('status-message');
-      statusMessage.innerHTML = '<div class="loading">Загрузка доступных таблиц...</div>';
+      // Получаем список таблиц из Grist
+      const tables = await grist.docApi.getTables();
 
-      // Получить список таблиц из Grist
-      const tables = await grist.docApi.fetchTable('_grist_Tables');
+      console.log('Доступные таблицы:', tables);
 
-      const tableSelect = document.getElementById('table-select');
-      tableSelect.innerHTML = '<option value="">-- Выберите таблицу --</option>';
-
-      if (tables && tables.id && Array.isArray(tables.id)) {
-        for (let i = 0; i < tables.id.length; i++) {
-          const id = tables.id[i];
-          const name = tables.tableId[i] || 'N/A';
-
-          // Пропустить внутренние таблицы Grist
-          if (typeof name === 'string' && !name.startsWith('_grist')) {
-            const option = document.createElement('option');
-            option.value = name;
-            option.textContent = name;
-            tableSelect.appendChild(option);
-          }
-        }
-      }
-
-      statusMessage.innerHTML = '';
+      // Возвращаем только имена таблиц
+      return tables.map(table => table.id);
     } catch (error) {
-      console.error('Ошибка загрузки таблиц:', error);
-      const statusMessage = document.getElementById('status-message');
-      statusMessage.innerHTML = `
-        <div class="alert alert-danger">
-          <strong>Ошибка загрузки таблиц:</strong> ${error.message}
-        </div>
-      `;
+      console.error('Ошибка загрузки списка таблиц:', error);
+      throw error;
     }
   }
 
   /**
-   * Загрузить и отобразить схему для указанной таблицы
-   * @param {string} tableName - Название таблицы
+   * Загрузить и отобразить схему для фиксированной таблицы
    */
-  async function loadAndDisplaySchema(tableName) {
+  async function loadAndDisplaySchema() {
+    const tableName = 'schema'; // Фиксированное имя таблицы
+
     try {
       // Загружаем данные из указанной таблицы
       const data = await DataModule.loadData(tableName);
-      
+
       // Получаем текущую конфигурацию
       const config = ConfigModule.getConfig();
-      
+
       // Отрисовываем схему
       SchemaModule.drawSchema(data, config);
-      
+
       showStatusMessage(`Схема загружена из таблицы "${tableName}"`, 'success');
     } catch (error) {
       console.error('Ошибка загрузки и отображения схемы:', error);
