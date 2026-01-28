@@ -112,13 +112,14 @@ var DataModule = (function() {
    */
   async function checkTableExists(tableName) {
     try {
-      await grist.docApi.fetchTable(tableName);
-      return true;
+      // Сначала получаем список всех таблиц
+      const availableTables = await getAvailableTables();
+
+      // Проверяем, есть ли таблица в списке
+      return availableTables.includes(tableName);
     } catch (error) {
-      if (error.message && error.message.includes('KeyError')) {
-        return false;
-      }
-      throw error;
+      console.error('Ошибка проверки существования таблицы:', error);
+      return false;
     }
   }
 
@@ -129,7 +130,8 @@ var DataModule = (function() {
   async function getAvailableTables() {
     try {
       const tables = await grist.docApi.listTables();
-      return tables.map(table => table.id);
+      // listTables() возвращает массив строк, а не объектов
+      return tables;
     } catch (error) {
       console.error('Ошибка получения списка таблиц:', error);
       return [];
@@ -149,14 +151,19 @@ var DataModule = (function() {
         throw new Error('Имя таблицы не указано');
       }
 
-      // Проверяем существование таблицы
-      const tableExists = await checkTableExists(tableName);
-      if (!tableExists) {
-        throw new Error(`Таблица "${tableName}" не найдена. Доступные таблицы: ${(await getAvailableTables()).join(', ')}`);
+      // Пытаемся загрузить данные из Grist по имени таблицы
+      let tableData;
+      try {
+        tableData = await grist.docApi.fetchTable(tableName);
+      } catch (fetchError) {
+        // Если произошла ошибка, проверяем, является ли она ошибкой отсутствия таблицы
+        if (fetchError.message && fetchError.message.includes('KeyError')) {
+          const availableTables = await getAvailableTables();
+          throw new Error(`Таблица "${tableName}" не найдена. Доступные таблицы: ${availableTables.join(', ')}`);
+        }
+        // Если другая ошибка, бросаем её дальше
+        throw fetchError;
       }
-
-      // Загружаем данные из Grist по имени таблицы (Grist API поддерживает имена таблиц)
-      const tableData = await grist.docApi.fetchTable(tableName);
 
       // Сохраняем текущую таблицу и данные
       setCurrentTableId(tableName);

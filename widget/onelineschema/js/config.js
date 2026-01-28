@@ -18,7 +18,7 @@ var ConfigModule = (function() {
   var DEFAULT_LAYOUT = 'vertical'; // 'vertical' или 'horizontal'
   var DEFAULT_SCALE = 1.0;
   var DEFAULT_GROUP_BY_FEEDER = true;
-  var DEFAULT_TABLE = 'schema';
+  var DEFAULT_TABLE = 'Schema'; // Имя таблицы по умолчанию, чувствительно к регистру
 
   // ========================================
   // ПРИВАТНЫЕ ПЕРЕМЕННЫЕ

@@ -25,7 +25,7 @@ var AppModule = (function() {
    */
   function getTableName() {
     const config = ConfigModule.getConfig();
-    return config.table || 'schema';
+    return config.table || 'Schema';
   }
 
   /**
@@ -47,7 +47,7 @@ var AppModule = (function() {
     } catch (error) {
       console.error('Ошибка обновления схемы:', error);
       UIModule.showStatusMessage(`Ошибка обновления схемы: ${error.message}`, 'error');
-      
+
       // Если таблица не найдена, показываем доступные таблицы
       if (error.message.includes('не найдена')) {
         try {
