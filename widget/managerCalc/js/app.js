@@ -12,8 +12,16 @@ const App = {
       // Ожидаем готовности Grist API
       await this.waitForGrist();
 
-      // Сообщаем Grist что виджет готов
-      grist.ready();
+      // Сообщаем Grist что виджет готов и запрашиваем полный доступ
+      grist.ready({
+        requiredAccess: 'full',
+        onEditOptions: (options) => {
+          console.log('Options changed:', options);
+        },
+        onAccessLevel: (level) => {
+          console.log('Access level set to:', level);
+        }
+      });
 
       // Инициализируем UI
       UIModule.init();
