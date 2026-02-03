@@ -25,22 +25,30 @@ const PathCalculator = {
    * @returns {string} Полный путь через все родительские устройства
    */
   buildFullPath(deviceId, deviceMap) {
+    console.log(`buildFullPath: deviceId=${deviceId}, deviceMap size=${deviceMap.size}`);
+
     // Проверка кэша
     if (this.cache.fullpath.has(deviceId)) {
-      return this.cache.fullpath.get(deviceId);
+      const cachedPath = this.cache.fullpath.get(deviceId);
+      console.log(`buildFullPath: cache hit for deviceId=${deviceId}, path="${cachedPath}"`);
+      return cachedPath;
     }
 
     const device = deviceMap.get(deviceId);
 
     // Если устройство не найдено
     if (!device) {
+      console.log(`buildFullPath: device with id ${deviceId} not found`);
       return '';
     }
+
+    console.log(`buildFullPath: processing device "${device.deviceName}", parentId=${device.parentId}`);
 
     // Если нет родителя - это корневое устройство
     if (!device.parentId) {
       const path = device.deviceName;
       this.cache.fullpath.set(deviceId, path);
+      console.log(`buildFullPath: root device "${device.deviceName}", path="${path}"`);
       return path;
     }
 
@@ -54,6 +62,7 @@ const PathCalculator = {
 
     // Сохраняем в кэш
     this.cache.fullpath.set(deviceId, fullPath);
+    console.log(`buildFullPath: calculated path for "${device.deviceName}", path="${fullPath}"`);
 
     return fullPath;
   },
@@ -65,23 +74,37 @@ const PathCalculator = {
    * @returns {string} Путь через головные устройства
    */
   buildOnlyGUPath(deviceId, deviceMap) {
+    console.log(`buildOnlyGUPath: deviceId=${deviceId}, deviceMap size=${deviceMap.size}`);
+
     // Проверка кэша
     if (this.cache.onlyGUpath.has(deviceId)) {
-      return this.cache.onlyGUpath.get(deviceId);
+      const cachedPath = this.cache.onlyGUpath.get(deviceId);
+      console.log(`buildOnlyGUPath: cache hit for deviceId=${deviceId}, path="${cachedPath}"`);
+      return cachedPath;
     }
 
     const device = deviceMap.get(deviceId);
 
     // Если устройство не найдено
     if (!device) {
+      console.log(`buildOnlyGUPath: device with id ${deviceId} not found`);
       return '';
     }
+
+    console.log(`buildOnlyGUPath: processing device "${device.deviceName}", parentId=${device.parentId}, canBeHead=${device.canBeHead}, headDeviceName="${device.headDeviceName}"`);
+
+    // Проверяем, является ли устройство головным по имени головного устройства
+    const isHeadByDeviceName = device.headDeviceName && device.deviceName === device.headDeviceName;
+    const canBeHead = device.canBeHead || isHeadByDeviceName;
+
+    console.log(`buildOnlyGUPath: устройство "${device.deviceName}" может быть головным: ${canBeHead} (canBeHead: ${device.canBeHead}, isHeadByDeviceName: ${isHeadByDeviceName})`);
 
     // Если нет родителя - это корневое устройство
     if (!device.parentId) {
       // Добавляем только если может быть головным
-      const path = device.canBeHead ? device.deviceName : '';
+      const path = canBeHead ? device.deviceName : '';
       this.cache.onlyGUpath.set(deviceId, path);
+      console.log(`buildOnlyGUPath: root device "${device.deviceName}", canBeHead=${canBeHead}, path="${path}"`);
       return path;
     }
 
@@ -91,14 +114,16 @@ const PathCalculator = {
     // Формируем путь с учётом флага canBeHead
     let onlyGUPath;
 
-    if (device.canBeHead) {
+    if (canBeHead) {
       // Текущее устройство может быть головным - добавляем в путь
       onlyGUPath = parentPath
         ? `${parentPath}${CONFIG.PATH_SEPARATOR}${device.deviceName}`
         : device.deviceName;
+      console.log(`buildOnlyGUPath: device "${device.deviceName}" can be head, adding to path: "${onlyGUPath}"`);
     } else {
       // Текущее устройство не может быть головным - пропускаем
       onlyGUPath = parentPath;
+      console.log(`buildOnlyGUPath: device "${device.deviceName}" cannot be head, skipping, path remains: "${onlyGUPath}"`);
     }
 
     // Сохраняем в кэш
@@ -114,28 +139,39 @@ const PathCalculator = {
    * @returns {Array<Object>} Массив обновлений для устройств
    */
   calculateAllPaths(devices, progressCallback) {
+    console.log(`calculateAllPaths: начали расчет путей для ${devices.length} устройств`);
+
     // Сбрасываем кэш перед началом расчёта
     this.resetCache();
 
     // Создаём словарь устройств для быстрого доступа
     const deviceMap = DataModule.createDeviceMap(devices);
+    console.log(`calculateAllPaths: создан deviceMap с ${deviceMap.size} устройствами`);
 
     const updates = [];
     const totalDevices = devices.length;
 
     // Проходим по всем устройствам
     devices.forEach((device, index) => {
+      console.log(`calculateAllPaths: обрабатываем устройство ${index + 1}/${totalDevices}: "${device.deviceName}", rowId=${device.rowId}`);
+
       // Рассчитываем оба пути
       const fullPath = this.buildFullPath(device.rowId, deviceMap);
       const onlyGUPath = this.buildOnlyGUPath(device.rowId, deviceMap);
 
+      console.log(`calculateAllPaths: для устройства "${device.deviceName}" рассчитаны пути: fullPath="${fullPath}", onlyGUPath="${onlyGUPath}"`);
+      console.log(`calculateAllPaths: текущие значения: fullpath="${device.fullpath}", onlyGUpath="${device.onlyGUpath}"`);
+
       // Добавляем обновление только если пути изменились
       if (device.fullpath !== fullPath || device.onlyGUpath !== onlyGUPath) {
+        console.log(`calculateAllPaths: обнаружены изменения для устройства "${device.deviceName}", добавляем в обновления`);
         updates.push({
           rowId: device.rowId,
           fullpath: fullPath,
           onlyGUpath: onlyGUPath
         });
+      } else {
+        console.log(`calculateAllPaths: изменения для устройства "${device.deviceName}" не обнаружены`);
       }
 
       // Вызываем callback для обновления прогресса
@@ -145,6 +181,7 @@ const PathCalculator = {
       }
     });
 
+    console.log(`calculateAllPaths: завершён расчет, найдено ${updates.length} обновлений`);
     return updates;
   },
 

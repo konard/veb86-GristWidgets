@@ -4,8 +4,8 @@
  */
 
 const CONFIG = {
-  // Название таблицы с устройствами
-  TABLE_NAME: 'AllDevice',
+  // Название таблицы с устройствами (по умолчанию)
+  TABLE_NAME: 'Table1', // Может быть переопределено через DataModule.setTableName()
 
   // Названия столбцов в таблице
   COLUMNS: {

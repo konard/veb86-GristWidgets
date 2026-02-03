@@ -12,8 +12,11 @@ const App = {
       // Ожидаем готовности Grist API
       await this.waitForGrist();
 
-      // Сообщаем Grist что виджет готов
-      grist.ready();
+      // Сообщаем Grist что виджет готов с требуемым уровнем доступа
+      grist.ready({
+        requiredAccess: 'full',
+        columns: []
+      });
 
       // Инициализируем UI
       UIModule.init();
@@ -54,6 +57,8 @@ const App = {
    */
   async handleCalculatePaths() {
     try {
+      console.log('handleCalculatePaths: начало обработки');
+
       // Блокируем обе кнопки во время расчёта
       UIModule.disableAllButtons();
       UIModule.hideStatus();
@@ -61,12 +66,17 @@ const App = {
 
       // Загружаем данные из таблицы
       UIModule.updateProgress(0, 0, 0);
+      console.log('handleCalculatePaths: загрузка данных из таблицы...');
       const rawData = await DataModule.loadAllDevices();
+      console.log('handleCalculatePaths: данные загружены, количество записей:', rawData?.id?.length || 0);
 
       // Преобразуем данные в удобный формат
+      console.log('handleCalculatePaths: преобразование данных...');
       const devices = DataModule.transformTableData(rawData);
+      console.log('handleCalculatePaths: преобразование завершено, количество устройств:', devices.length);
 
       if (devices.length === 0) {
+        console.log('handleCalculatePaths: таблица пуста');
         UIModule.showStatus('Таблица AllDevice пуста', 'info');
         UIModule.hideProgress();
         UIModule.enableAllButtons();
@@ -74,6 +84,7 @@ const App = {
       }
 
       // Валидация данных
+      console.log('handleCalculatePaths: валидация данных...');
       const validation = PathCalculator.validateData(devices);
 
       if (!validation.isValid) {
@@ -86,16 +97,22 @@ const App = {
         return;
       }
 
+      console.log('handleCalculatePaths: валидация прошла успешно');
+
       // Рассчитываем пути для всех устройств
+      console.log('handleCalculatePaths: начало расчета путей...');
       const updates = PathCalculator.calculateAllPaths(
         devices,
         (percent, current, total) => {
+          console.log(`handleCalculatePaths: прогресс расчета - ${percent}% (${current}/${total})`);
           UIModule.updateProgress(percent, current, total);
         }
       );
+      console.log('handleCalculatePaths: расчет завершен, найдено обновлений:', updates.length);
 
       // Если нет изменений
       if (updates.length === 0) {
+        console.log('handleCalculatePaths: нет изменений для обновления');
         UIModule.showStatus(
           'Все пути уже актуальны, обновление не требуется',
           'info'
@@ -106,7 +123,9 @@ const App = {
       }
 
       // Обновляем данные в таблице пакетами
+      console.log('handleCalculatePaths: применение обновлений...');
       await this.applyUpdatesInBatches(updates);
+      console.log('handleCalculatePaths: обновления применены');
 
       // Показываем сообщение об успехе
       UIModule.showStatus(
@@ -125,6 +144,7 @@ const App = {
       // Разблокируем кнопки и скрываем прогресс
       UIModule.hideProgress();
       UIModule.enableAllButtons();
+      console.log('handleCalculatePaths: завершение обработки');
     }
   },
 
