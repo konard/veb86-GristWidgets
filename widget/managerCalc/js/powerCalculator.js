@@ -69,48 +69,91 @@ const PowerCalculator = {
   },
 
   /**
-   * Рассчитывает мощности для всех устройств (только прямые дочерние)
+   * Рассчитывает мощности для всех устройств с многопроходным алгоритмом
    * @param {Array<Object>} devices - Массив всех устройств
    * @param {Function} progressCallback - Функция обратного вызова для прогресса
    * @returns {Array<Object>} Массив обновлений для устройств
    */
   calculateAllPowers(devices, progressCallback) {
-    const deviceMap = this.createDeviceMap(devices);
-    const childrenMap = this.createChildrenMap(devices);
+    let currentData = [...devices];
+    let allUpdates = [];
+    let passCount = 0;
+    const maxPasses = 10; // Защита от бесконечных циклов
+    let totalUpdates = 0;
 
-    const updates = [];
-    const totalDevices = devices.length;
+    // Многопроходный расчёт до стабилизации
+    while (passCount < maxPasses) {
+      const deviceMap = this.createDeviceMap(currentData);
+      const childrenMap = this.createChildrenMap(currentData);
 
-    // Проходим по всем устройствам
-    devices.forEach((device, index) => {
-      const currentPower = parseFloat(device.power) || 0;
-      const hasChildren = childrenMap.has(device.nmoBaseName);
-      
-      if (hasChildren) {
-        // Рассчитываем мощность для устройств с дочерними устройствами
-        const calculatedPower = this.calculateDevicePower(
-          device.nmoBaseName,
-          childrenMap,
-          deviceMap
-        );
+      const updates = [];
+      const totalDevices = currentData.length;
 
-        // Обновляем только если мощность изменилась
-        if (Math.abs(calculatedPower - currentPower) > 0.001) {
-          updates.push({
-            rowId: device.rowId,
-            power: calculatedPower
-          });
+      // Проходим по всем устройствам
+      currentData.forEach((device, index) => {
+        const currentPower = parseFloat(device.power) || 0;
+        const hasChildren = childrenMap.has(device.nmoBaseName);
+        
+        if (hasChildren) {
+          // Рассчитываем мощность для устройств с дочерними устройствами
+          const calculatedPower = this.calculateDevicePower(
+            device.nmoBaseName,
+            childrenMap,
+            deviceMap
+          );
+
+          // Обновляем только если мощность изменилась
+          if (Math.abs(calculatedPower - currentPower) > 0.001) {
+            updates.push({
+              rowId: device.rowId,
+              power: calculatedPower
+            });
+          }
         }
+
+        // Вызываем callback для обновления прогресса
+        if (progressCallback) {
+          const totalProgress = Math.min(((totalUpdates + index + 1) / (totalDevices * maxPasses)) * 100, 100);
+          const currentCount = totalUpdates + index + 1;
+          const totalExpected = totalDevices * maxPasses;
+          progressCallback(Math.round(totalProgress), currentCount, totalExpected);
+        }
+      });
+
+      // Если нет обновлений, достигли стабилизации
+      if (updates.length === 0) {
+        break;
       }
 
-      // Вызываем callback для обновления прогресса
-      if (progressCallback) {
-        const progress = Math.round(((index + 1) / totalDevices) * 100);
-        progressCallback(progress, index + 1, totalDevices);
-      }
+      // Применяем обновления к данным для следующего прохода
+      updates.forEach(update => {
+        const deviceIndex = currentData.findIndex(d => d.rowId === update.rowId);
+        if (deviceIndex !== -1) {
+          currentData[deviceIndex].power = update.power;
+        }
+      });
+
+      allUpdates = allUpdates.concat(updates);
+      totalUpdates += updates.length;
+      passCount++;
+
+      console.log(`Pass ${passCount}: ${updates.length} updates applied`);
+    }
+
+    // Финальный вызов прогресса с корректными значениями
+    if (progressCallback) {
+      progressCallback(100, totalUpdates, totalUpdates);
+    }
+
+    console.log(`Multi-pass calculation completed: ${passCount} passes, ${totalUpdates} total updates`);
+    
+    // Возвращаем только уникальные обновления (последние значения для каждого устройства)
+    const uniqueUpdates = {};
+    allUpdates.forEach(update => {
+      uniqueUpdates[update.rowId] = update;
     });
 
-    return updates;
+    return Object.values(uniqueUpdates);
   },
 
   /**
